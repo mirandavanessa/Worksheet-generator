@@ -3,3 +3,4 @@ matplotlib>=3.8
 pillow>=10.0
 reportlab>=4.0
 streamlit-drawable-canvas>=0.9.3
+streamlit-autorefresh>=1.0.1
