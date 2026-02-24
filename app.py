@@ -35,7 +35,7 @@ button[kind="secondary"] {
 /* Reduce excess spacing inside columns */
 div[data-testid="column"] > div { gap: 0.30rem; }
 /* Reduce space above first element */
-.block-container { padding-top: 0.6rem; }
+.block-container { padding-top: 1.2rem; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -90,7 +90,7 @@ def _render_canvas(slot: str):
         stroke_width=stroke_width,
         stroke_color=stroke_color,
         background_color="#000000",
-        height=520,  # +100% vs previous
+        height=416,  # 20% smaller than v7
         drawing_mode="freedraw",
         key=f"canvas__{slot}",
     )
@@ -128,6 +128,7 @@ def _enter_practice(topic: str, template_id: str, max_difficulty: int):
     st.rerun()
 
 
+
 def _render_practice_mode():
     ctx = st.session_state.get("practice_ctx")
     if not ctx:
@@ -138,16 +139,46 @@ def _render_practice_mode():
     template_id = ctx["template_id"]
     max_difficulty = int(ctx["max_difficulty"])
 
-    topL, topR, _ = st.columns([1, 1, 10])
-    if topL.button("←", key="back_main", help="Back"):
+    # Font scaling (practice page only)
+    if "practice_scale" not in st.session_state:
+        st.session_state.practice_scale = 1.00  # 1.0 = default
+
+    scale = float(st.session_state.practice_scale)
+    st.markdown(
+        f"""
+<style>
+/* Practice-page font scaling */
+.katex, .katex-display > .katex {{
+    font-size: {scale:.2f}em !important;
+}}
+div[data-testid="stMarkdownContainer"] p {{
+    font-size: {0.95*scale:.2f}rem !important;
+    margin-bottom: 0.25rem;
+}}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+    top = st.columns([1, 1, 1, 1, 8])
+    if top[0].button("←", key="back_main", help="Back"):
         st.session_state.mode = "main"
         st.rerun()
-    if topR.button("N", key="regen_practice", help="New set of 10"):
+
+    if top[1].button("N", key="regen_practice", help="New set of 10"):
         st.session_state.practice_seed = random.randint(1, 10**9)
         st.session_state.practice_questions = None
         for k in list(st.session_state.keys()):
             if k.startswith("prac_ans__"):
                 del st.session_state[k]
+        st.rerun()
+
+    if top[2].button("+", key="prac_plus", help="Increase font size"):
+        st.session_state.practice_scale = min(1.60, round(scale + 0.10, 2))
+        st.rerun()
+
+    if top[3].button("−", key="prac_minus", help="Decrease font size"):
+        st.session_state.practice_scale = max(0.80, round(scale - 0.10, 2))
         st.rerun()
 
     st.markdown(f"#### {topic}")
@@ -167,9 +198,10 @@ def _render_practice_mode():
     # Two columns (5 per column) for iPad-friendly viewing
     colA, colB = st.columns(2, gap="large")
 
-    for i, q in enumerate(qs):
+    for i in range(len(qs)):
         target = colA if i < 5 else colB
         with target:
+            q = qs[i]
             st.markdown(f"**{i+1}. {q.prompt}**")
             if q.latex.strip():
                 st.latex(q.latex)
@@ -178,18 +210,34 @@ def _render_practice_mode():
             if ans_key not in st.session_state:
                 st.session_state[ans_key] = False
 
-            btn_cols = st.columns([1, 9])
-            if btn_cols[0].button("A", key=f"pracA_btn__{i}", help="Show/hide answer"):
+            # Controls row: N, A, answer shown to the RIGHT of A
+            cN, cA, cAns = st.columns([1, 1, 10])
+
+            if cN.button("N", key=f"pracN_btn__{i}", help="New version"):
+                new_seed = random.randint(1, 10**9)
+                qs[i] = regenerate_question(
+                    topic=topic,
+                    template_id=q.template_id,
+                    max_difficulty=max_difficulty,
+                    new_seed=new_seed,
+                )
+                st.session_state.practice_questions = qs
+                st.session_state[ans_key] = False
+                st.rerun()
+
+            if cA.button("A", key=f"pracA_btn__{i}", help="Show/hide answer"):
                 st.session_state[ans_key] = not st.session_state[ans_key]
                 st.rerun()
 
             if st.session_state[ans_key]:
-                # Green answer with LaTeX inside markdown (KaTeX)
-                st.markdown(f":green[$ {q.answer_latex} $]")
+                # Green answer (KaTeX)
+                cAns.latex(rf"\color{{green}}{{{qs[i].answer_latex}}}")
+            else:
+                # keep a small placeholder to reduce layout shifts
+                cAns.markdown("&nbsp;", unsafe_allow_html=True)
 
-        # light spacing between questions inside a column
-        if i in (0, 1, 2, 3, 4, 5, 6, 7, 8):
-            pass
+            st.markdown("<div style='height: 0.75rem'></div>", unsafe_allow_html=True)
+
 
 
 # ---------------- Sidebar ----------------
@@ -241,6 +289,9 @@ if "generated" not in st.session_state or st.session_state.generated is None:
 
 grouped = st.session_state.generated
 ordered_topics = [t for t in topics if t in grouped]
+
+# Spacer above first topic block
+st.markdown("<div style='height: 0.9rem'></div>", unsafe_allow_html=True)
 
 for topic in ordered_topics:
     qs = grouped.get(topic, [])

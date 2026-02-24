@@ -165,21 +165,25 @@ def _gen_continuing_sequences(rng: random.Random, seed: int):
     return prompt, latex, answer, working
 
 
+
 def _gen_find_nth_term(rng: random.Random, seed: int):
-    # Arithmetic sequence only (GCSE standard)
-    a = rng.randint(-6, 12)
+    # Arithmetic sequence (GCSE standard) – use difference + 0th term method
+    a1 = rng.randint(-6, 12)
     d = rng.choice([1,2,3,4,5,6,7,8,9,-1,-2,-3,-4,-5])
-    seq = [a + i*d for i in range(5)]
+    seq = [a1 + i*d for i in range(5)]
     prompt = "Find the nth term of the sequence:"
     latex = _sequence_str(seq)
-    # nth term: a + (n-1)d = dn + (a-d)
-    A = d
-    B = a - d
-    answer = rf"{_lin_expr(A, B, 'n')}"
+
+    # 0th term method: a_0 = a_1 - d, then a_n = dn + a_0
+    a0 = a1 - d
+    answer = _lin_expr(d, a0, "n")
+
+    d_str = f"{d}" if d >= 0 else f"({d})"
     working = [
-        ("text", f"Common difference d = {d}."),
-        ("math", rf"a_n = a_1 + (n-1)d = {a} + (n-1)\times {d}"),
-        ("math", rf"a_n = {a} + {d}n - {d} = {d}n + {a-d}"),
+        ("text", f"The common difference is {d}."),
+        ("math", rf"a_0 = a_1 - d = {a1} - {d_str} = {a0}"),
+        ("math", rf"a_n = d n + a_0 = {d}n + {a0}"),
+        ("math", rf"a_n = {answer}"),
     ]
     return prompt, latex, answer, working
 
