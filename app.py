@@ -4,7 +4,7 @@ import streamlit as st
 from question_bank import available_topics, generate_two_per_topic, regenerate_question
 from pdf_export import build_pdf_bytes
 
-# Optional drawing canvas
+# Optional drawing canvas (per-question)
 try:
     from streamlit_drawable_canvas import st_canvas
     _CANVAS_OK = True
@@ -14,19 +14,20 @@ except Exception:
 
 st.set_page_config(page_title="Worksheet Generator", layout="wide")
 
-# Make control buttons small (minimise on-screen distraction)
+# Small, low-distraction control buttons (secondary buttons only)
 st.markdown(
     """
 <style>
-/* Shrink all Streamlit buttons */
-div.stButton > button {
-    padding: 0.10rem 0.35rem;
-    font-size: 0.78rem;
-    line-height: 1;
-    height: 1.55rem;
-    min-height: 1.55rem;
+/* Shrink SECONDARY buttons (used for per-question controls) */
+button[kind="secondary"] {
+    padding: 0.02rem 0.22rem !important;
+    font-size: 0.62rem !important;
+    line-height: 1 !important;
+    height: 1.10rem !important;
+    min-height: 1.10rem !important;
+    min-width: 1.45rem !important;
 }
-/* Reduce vertical gap between controls and content */
+/* Reduce excess spacing between elements inside columns */
 div[data-testid="column"] > div { gap: 0.35rem; }
 </style>
 """,
@@ -34,7 +35,10 @@ div[data-testid="column"] > div { gap: 0.35rem; }
 )
 
 st.title("Worksheet Generator")
-st.caption("Two questions per topic (side-by-side) • N=new version • H=hide/show Q2 • A=answer • W=working")
+st.caption(
+    "Two questions per topic (side-by-side) • "
+    "N=new version • H=hide/show Q2 • A=answer • W=working • D=drawing pad"
+)
 
 DEFAULT_TOPICS = [
     "Continuing sequences",
@@ -70,11 +74,16 @@ with st.sidebar:
 
     colA, colB = st.columns(2)
     with colA:
-        if st.button("Regenerate ALL"):
+        if st.button("Regenerate ALL", type="primary"):
             st.session_state.master_seed = random.randint(1, 10**9)
             st.session_state.generated = None
     with colB:
-        master_seed_manual = st.number_input("Master seed", min_value=1, max_value=10**9, value=int(st.session_state.master_seed))
+        master_seed_manual = st.number_input(
+            "Master seed",
+            min_value=1,
+            max_value=10**9,
+            value=int(st.session_state.master_seed),
+        )
         st.session_state.master_seed = int(master_seed_manual)
 
 seed = int(st.session_state.master_seed)
@@ -90,6 +99,21 @@ if "generated" not in st.session_state or st.session_state.generated is None:
 grouped = st.session_state.generated
 ordered_topics = [t for t in topics if t in grouped]
 
+def _render_canvas(slot: str):
+    """Black canvas + white pen, per question."""
+    if not _CANVAS_OK:
+        st.warning("Drawing component not available. Ensure 'streamlit-drawable-canvas' is installed.")
+        return
+    st_canvas(
+        fill_color="rgba(255, 255, 255, 0)",
+        stroke_width=3,
+        stroke_color="#FFFFFF",
+        background_color="#000000",
+        height=260,
+        drawing_mode="freedraw",
+        key=f"canvas__{slot}",
+    )
+
 for topic in ordered_topics:
     st.markdown(f"### {topic}")
     qs = grouped.get(topic, [])
@@ -104,36 +128,19 @@ for topic in ordered_topics:
 
     c1, c2 = st.columns(2, gap="large")
 
-    # ---- Q1 (always visible) ----
-    q1 = qs[0]
+    # ---------------- Q1 (always visible) ----------------
     slot1 = _slot(topic, 0)
     ans1_key = f"ans__{slot1}"
     work1_key = f"work__{slot1}"
-    if ans1_key not in st.session_state:
-        st.session_state[ans1_key] = False
-    if work1_key not in st.session_state:
-        st.session_state[work1_key] = False
+    draw1_key = f"draw__{slot1}"
+    for k in (ans1_key, work1_key, draw1_key):
+        if k not in st.session_state:
+            st.session_state[k] = False
 
     with c1:
-        ctrl = st.columns(3)
-        # N A W
-        if ctrl[0].button("N", key=f"n__{slot1}", help="New version (this question only)"):
-            new_seed = random.randint(1, 10**9)
-            grouped[topic][0] = regenerate_question(topic=topic, template_id=q1.template_id, max_difficulty=max_diff, new_seed=new_seed)
-            # reset reveal states for this slot
-            st.session_state[ans1_key] = False
-            st.session_state[work1_key] = False
-            st.session_state.generated = grouped
-            st.rerun()
+        q1 = grouped[topic][0]
 
-        if ctrl[1].button("A", key=f"a__{slot1}", help="Show/hide answer"):
-            _toggle(ans1_key, default=False)
-            st.rerun()
-
-        if ctrl[2].button("W", key=f"w__{slot1}", help="Show/hide full working"):
-            _toggle(work1_key, default=False)
-            st.rerun()
-
+        # Content first
         st.markdown(f"**{q1.prompt}**")
         if q1.latex.strip():
             st.latex(q1.latex)
@@ -150,38 +157,45 @@ for topic in ordered_topics:
                 else:
                     st.latex(content)
 
-    # ---- Q2 (hidden by default, reveal with H) ----
-    q2 = qs[1]
-    slot2 = _slot(topic, 1)
-    ans2_key = f"ans__{slot2}"
-    work2_key = f"work__{slot2}"
-    if ans2_key not in st.session_state:
-        st.session_state[ans2_key] = False
-    if work2_key not in st.session_state:
-        st.session_state[work2_key] = False
+        if st.session_state[draw1_key]:
+            _render_canvas(slot1)
 
-    with c2:
+        # Controls at bottom
         ctrl = st.columns(4)
-        # N A W H
-        if ctrl[0].button("N", key=f"n__{slot2}", help="New version (this question only)"):
+        if ctrl[0].button("N", key=f"n__{slot1}", help="New version (this question only)"):
             new_seed = random.randint(1, 10**9)
-            grouped[topic][1] = regenerate_question(topic=topic, template_id=q2.template_id, max_difficulty=max_diff, new_seed=new_seed)
-            st.session_state[ans2_key] = False
-            st.session_state[work2_key] = False
+            grouped[topic][0] = regenerate_question(
+                topic=topic, template_id=q1.template_id, max_difficulty=max_diff, new_seed=new_seed
+            )
+            st.session_state[ans1_key] = False
+            st.session_state[work1_key] = False
+            st.session_state[draw1_key] = False
             st.session_state.generated = grouped
             st.rerun()
 
-        if ctrl[1].button("A", key=f"a__{slot2}", help="Show/hide answer"):
-            _toggle(ans2_key, default=False)
+        if ctrl[1].button("A", key=f"a__{slot1}", help="Show/hide answer"):
+            _toggle(ans1_key, default=False)
             st.rerun()
 
-        if ctrl[2].button("W", key=f"w__{slot2}", help="Show/hide full working"):
-            _toggle(work2_key, default=False)
+        if ctrl[2].button("W", key=f"w__{slot1}", help="Show/hide full working"):
+            _toggle(work1_key, default=False)
             st.rerun()
 
-        if ctrl[3].button("H", key=f"h__{slot2}", help="Hide/show the second question"):
-            st.session_state[show2_key] = not st.session_state.get(show2_key, False)
+        if ctrl[3].button("D", key=f"d__{slot1}", help="Show/hide drawing pad"):
+            _toggle(draw1_key, default=False)
             st.rerun()
+
+    # ---------------- Q2 (hidden by default) ----------------
+    slot2 = _slot(topic, 1)
+    ans2_key = f"ans__{slot2}"
+    work2_key = f"work__{slot2}"
+    draw2_key = f"draw__{slot2}"
+    for k in (ans2_key, work2_key, draw2_key):
+        if k not in st.session_state:
+            st.session_state[k] = False
+
+    with c2:
+        q2 = grouped[topic][1]
 
         if not st.session_state.get(show2_key, False):
             st.info("Second question hidden. Press **H** to reveal.")
@@ -202,6 +216,45 @@ for topic in ordered_topics:
                     else:
                         st.latex(content)
 
+            if st.session_state[draw2_key]:
+                _render_canvas(slot2)
+
+        # Controls at bottom (always show H; others only when revealed)
+        if st.session_state.get(show2_key, False):
+            ctrl = st.columns(5)
+            if ctrl[0].button("N", key=f"n__{slot2}", help="New version (this question only)"):
+                new_seed = random.randint(1, 10**9)
+                grouped[topic][1] = regenerate_question(
+                    topic=topic, template_id=q2.template_id, max_difficulty=max_diff, new_seed=new_seed
+                )
+                st.session_state[ans2_key] = False
+                st.session_state[work2_key] = False
+                st.session_state[draw2_key] = False
+                st.session_state.generated = grouped
+                st.rerun()
+
+            if ctrl[1].button("A", key=f"a__{slot2}", help="Show/hide answer"):
+                _toggle(ans2_key, default=False)
+                st.rerun()
+
+            if ctrl[2].button("W", key=f"w__{slot2}", help="Show/hide full working"):
+                _toggle(work2_key, default=False)
+                st.rerun()
+
+            if ctrl[3].button("D", key=f"d__{slot2}", help="Show/hide drawing pad"):
+                _toggle(draw2_key, default=False)
+                st.rerun()
+
+            if ctrl[4].button("H", key=f"h__{slot2}", help="Hide/show the second question"):
+                st.session_state[show2_key] = not st.session_state.get(show2_key, False)
+                st.rerun()
+        else:
+            # Only show H (minimal distractions)
+            ctrl = st.columns([1, 1, 1, 1, 1])
+            if ctrl[4].button("H", key=f"h__{slot2}", help="Hide/show the second question"):
+                st.session_state[show2_key] = True
+                st.rerun()
+
     st.divider()
 
 # PDF export (always includes both questions for each topic)
@@ -213,26 +266,5 @@ st.download_button(
     data=pdf_bytes,
     file_name="worksheet.pdf",
     mime="application/pdf",
+    type="primary",
 )
-
-# Scratch pad / drawing area (works with Apple Pencil in Safari)
-with st.expander("Scratch pad (draw with Apple Pencil / stylus)", expanded=False):
-    if not _CANVAS_OK:
-        st.warning("Drawing component not available. Ensure 'streamlit-drawable-canvas' is in requirements.txt.")
-    else:
-        st.caption("This is a simple free-draw canvas. Use it for live modelling. It is not automatically saved between sessions.")
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            stroke_width = st.slider("Pen width", 1, 12, 3, key="scratch_stroke")
-        with col2:
-            height = st.slider("Canvas height", 250, 900, 450, step=50, key="scratch_h")
-
-        st_canvas(
-            fill_color="rgba(0, 0, 0, 0)",
-            stroke_width=stroke_width,
-            stroke_color="#000000",
-            background_color="#FFFFFF",
-            height=height,
-            drawing_mode="freedraw",
-            key="scratch_canvas",
-        )
