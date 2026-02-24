@@ -556,3 +556,20 @@ def regenerate_question(topic: str, template_id: str, max_difficulty: int, new_s
         template_id=tmpl.template_id,
         seed=new_seed,
     )
+
+
+def generate_questions_by_template(topic: str, template_id: str, max_difficulty: int, n: int, seed: int) -> List[GeneratedQuestion]:
+    """Generate n fresh questions using the same template_id (same type/level)."""
+    rng = random.Random(seed)
+    out: List[GeneratedQuestion] = []
+    for _ in range(n):
+        qseed = rng.randint(1, 10**9)
+        out.append(
+            regenerate_question(
+                topic=topic,
+                template_id=template_id,
+                max_difficulty=max_difficulty,
+                new_seed=qseed,
+            )
+        )
+    return out
