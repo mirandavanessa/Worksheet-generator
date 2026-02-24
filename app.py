@@ -1,110 +1,120 @@
 import random
 import streamlit as st
 
-from question_bank import (
-    available_topics,
-    generate_question_from_template,
-    generate_set_meta,
-)
+from question_bank import available_topics, generate_two_per_topic, regenerate_question
 from pdf_export import build_pdf_bytes
 
 st.set_page_config(page_title="Worksheet Generator", layout="wide")
+
 st.title("Worksheet Generator")
+st.caption("Two questions per topic (side-by-side) • Per-question regenerate • Full working toggle")
+
+DEFAULT_TOPICS = [
+    "Continuing sequences",
+    "Finding the nth term",
+    "Using the nth term",
+    "Solving 1 step equations",
+    "Solving 2 step equations",
+    "Finding percentages using non-calculator methods",
+    "Finding percentages using calculator methods",
+    "Increasing and decreasing by percentages using non-calculator methods",
+    "Increasing and decreasing by percentages using calculator methods",
+    "Completing the square",
+]
 
 with st.sidebar:
     st.header("Settings")
-    topics = st.multiselect("Topics", options=available_topics(), default=available_topics()[:3])
-    max_diff = st.slider("Max difficulty", 1, 5, 2)
-    n_q = st.number_input("Number of questions", min_value=4, max_value=40, value=8, step=1)
+    topics = st.multiselect(
+        "Topics",
+        options=available_topics(),
+        default=[t for t in DEFAULT_TOPICS if t in available_topics()],
+    )
+    max_diff = st.slider("Max difficulty", 1, 5, 3)
 
-    st.divider()
-    show_answers = st.toggle("Show answers (on screen)", value=False)
-
-    # keep a settings signature so we can rebuild the set automatically when settings change
-    settings_sig = (tuple(topics), int(max_diff), int(n_q))
-
-    if "settings_sig" not in st.session_state:
-        st.session_state.settings_sig = settings_sig
-
-    if "set_seed" not in st.session_state:
-        st.session_state.set_seed = random.randint(1, 10**9)
-
-    if "q_meta" not in st.session_state:
-        st.session_state.q_meta = []
+    if "master_seed" not in st.session_state:
+        st.session_state.master_seed = random.randint(1, 10**9)
 
     colA, colB = st.columns(2)
     with colA:
-        if st.button("Regenerate all"):
-            st.session_state.set_seed = random.randint(1, 10**9)
-            st.session_state.q_meta = generate_set_meta(topics, int(max_diff), int(n_q), int(st.session_state.set_seed))
-            # reset working toggles
-            for i in range(int(n_q)):
-                st.session_state.pop(f"show_work_{i}", None)
-
+        if st.button("Regenerate ALL"):
+            st.session_state.master_seed = random.randint(1, 10**9)
+            st.session_state.generated = None
     with colB:
-        seed_manual = st.number_input("Set seed", min_value=1, max_value=10**9, value=int(st.session_state.set_seed))
-        st.session_state.set_seed = int(seed_manual)
+        master_seed_manual = st.number_input("Master seed", min_value=1, max_value=10**9, value=int(st.session_state.master_seed))
+        st.session_state.master_seed = int(master_seed_manual)
 
-# Validate topics
+seed = int(st.session_state.master_seed)
+
 if not topics:
     st.warning("Pick at least one topic in the sidebar.")
     st.stop()
 
-# Rebuild set if settings changed or meta empty
-if st.session_state.settings_sig != settings_sig or not st.session_state.q_meta:
-    st.session_state.settings_sig = settings_sig
-    st.session_state.q_meta = generate_set_meta(topics, int(max_diff), int(n_q), int(st.session_state.set_seed))
-    for i in range(int(n_q)):
-        st.session_state.pop(f"show_work_{i}", None)
+# Generate or reuse
+if "generated" not in st.session_state or st.session_state.generated is None:
+    st.session_state.generated = generate_two_per_topic(topics=topics, max_difficulty=max_diff, seed=seed)
 
-if not st.session_state.q_meta:
-    st.error("No questions matched your filters.")
-    st.stop()
+grouped = st.session_state.generated
 
-st.caption(f"Seed: {int(st.session_state.set_seed)}  •  Topics: {', '.join(topics)}  •  Max difficulty: {int(max_diff)}")
+# Ensure topic order stays as selected
+ordered_topics = [t for t in topics if t in grouped]
 
-questions = []
-for meta in st.session_state.q_meta:
-    questions.append(generate_question_from_template(meta["template_id"], int(meta["seed"])))
+# UI: each topic row has two columns
+for topic in ordered_topics:
+    st.markdown(f"### {topic}")
+    qs = grouped.get(topic, [])
+    if len(qs) < 2:
+        st.info("Not enough templates found for this topic at the selected difficulty.")
+        continue
 
-# Render questions
-for i, q in enumerate(questions):
-    left, right = st.columns([0.78, 0.22])
+    c1, c2 = st.columns(2, gap="large")
+    for col, idx in [(c1, 0), (c2, 1)]:
+        q = qs[idx]
+        with col:
+            # prompt
+            st.markdown(f"**{q.prompt}**")
+            if q.latex.strip():
+                st.latex(q.latex)
 
-    with left:
-        st.markdown(f"### {i+1}.")
-        st.latex(q.prompt)
-        st.latex(q.latex)
+            # Buttons
+            btn_row = st.columns(2)
+            regen_key = f"regen_{q.qid}"
+            work_key = f"work_{q.qid}"
 
-        if show_answers:
-            st.markdown("**Answer:**")
-            st.latex(q.answer_latex)
+            if work_key not in st.session_state:
+                st.session_state[work_key] = False
 
-        show_work_key = f"show_work_{i}"
-        if st.session_state.get(show_work_key, False):
-            st.markdown("**Working:**")
-            for step in q.working_steps_latex:
-                st.latex(step)
+            with btn_row[0]:
+                if st.button("New version", key=regen_key):
+                    new_seed = random.randint(1, 10**9)
+                    new_q = regenerate_question(topic=topic, template_id=q.template_id, max_difficulty=max_diff, new_seed=new_seed)
+                    grouped[topic][idx] = new_q
+                    st.session_state.generated = grouped
+                    st.rerun()
 
-    with right:
-        st.markdown(" ")
-        st.markdown(" ")
-        if st.button("New version", key=f"regen_{i}"):
-            # keep the same template_id but change the seed
-            st.session_state.q_meta[i]["seed"] = random.randint(1, 10**9)
-            st.session_state[show_work_key] = False
-            st.rerun()
+            with btn_row[1]:
+                label = "Hide working" if st.session_state[work_key] else "Show working"
+                if st.button(label, key=f"toggle_{q.qid}"):
+                    st.session_state[work_key] = not st.session_state[work_key]
+                    st.rerun()
 
-        label = "Hide working" if st.session_state.get(show_work_key, False) else "Show working"
-        if st.button(label, key=f"work_{i}"):
-            st.session_state[show_work_key] = not st.session_state.get(show_work_key, False)
-            st.rerun()
+            # Working
+            if st.session_state[work_key]:
+                st.markdown("**Working:**")
+                for kind, content in q.working:
+                    if kind == "text":
+                        st.markdown(f"- {content}")
+                    else:
+                        st.latex(content)
+
+            # Answer (collapsed)
+            with st.expander("Answer"):
+                st.latex(q.answer_latex)
 
     st.divider()
 
-# PDF download
-pdf_title = " / ".join(topics) if len(topics) <= 3 else "Mixed topics"
-pdf_bytes = build_pdf_bytes(title=pdf_title, questions=questions, seed=int(st.session_state.set_seed))
+# PDF export
+pdf_title = "Mixed topics" if len(ordered_topics) > 1 else ordered_topics[0]
+pdf_bytes = build_pdf_bytes(title=pdf_title, grouped={t: grouped[t] for t in ordered_topics}, seed=seed)
 
 st.download_button(
     label="Download PDF (Questions + Answers)",
