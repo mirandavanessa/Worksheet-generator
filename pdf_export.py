@@ -53,6 +53,23 @@ def _draw_math(c: canvas.Canvas, latex: str, x: float, y_top: float, max_w: floa
     return h
 
 
+def _draw_png(c: canvas.Canvas, png_bytes: bytes, x: float, y_top: float, max_w: float, max_h: float, assumed_dpi: float = 300.0) -> float:
+    """Draw a PNG image scaled to fit within max_w/max_h (points). Returns height used."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
+    w_pt = (img.width / assumed_dpi) * 72.0
+    h_pt = (img.height / assumed_dpi) * 72.0
+
+    scale = min(max_w / w_pt, max_h / h_pt)
+    w = w_pt * scale
+    h = h_pt * scale
+
+    b = io.BytesIO()
+    img.save(b, format="PNG")
+    b.seek(0)
+    c.drawImage(ImageReader(b), x, y_top - h, width=w, height=h, mask="auto")
+    return h
+
+
 def _draw_wrapped_text(c: canvas.Canvas, text: str, x: float, y_top: float, max_w: float, font: str, size: int, leading: float) -> float:
     c.setFont(font, size)
     # naive word-wrap
@@ -113,7 +130,10 @@ def build_pdf_bytes(title: str, grouped: Dict[str, List[GeneratedQuestion]], see
             used += _draw_wrapped_text(c, q.prompt, x0, y_content, col_w, "Helvetica", 10, leading=11)
             # latex line (optional)
             y_math_top = y_content - used - 0.15 * cm
-            if q.latex.strip():
+            if getattr(q, "diagram_png", None):
+                h = _draw_png(c, q.diagram_png, x0, y_math_top, max_w=col_w, max_h=2.85*cm)
+                used2 = (0.15 * cm + h)
+            elif q.latex.strip():
                 h = _draw_math(c, q.latex, x0, y_math_top, max_w=col_w, target_h=0.72*cm)
                 used2 = (0.15 * cm + h)
             else:

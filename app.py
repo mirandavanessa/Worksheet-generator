@@ -218,6 +218,7 @@ DEFAULT_TOPICS = [
     "Increasing and decreasing by percentages using non-calculator methods",
     "Increasing and decreasing by percentages using calculator methods",
     "Completing the square",
+    "Perimeter of rectilinear shapes",
 ]
 
 
@@ -638,6 +639,21 @@ def _regen_pair(topic: str, level_id: str, max_diff: int) -> None:
     st.session_state.pdf_cache = None
     st.session_state.pdf_fp = None
 
+def _regen_one(topic: str, idx: int, max_diff: int) -> None:
+    """Regenerate ONE question within a topic (keeps the same type via template_id, but allows different numbers/steps)."""
+    grouped = st.session_state.generated
+    q = grouped[topic][idx]
+    grouped[topic][idx] = regenerate_question(
+        topic=topic,
+        template_id=q.template_id,
+        max_difficulty=int(max_diff),
+        new_seed=random.randint(1, 10**9),
+        fixed_params=None,
+    )
+    st.session_state.generated = grouped
+    st.session_state.pdf_cache = None
+    st.session_state.pdf_fp = None
+
 def _timer_controls_row(key_prefix: str):
     """Controls shown near the top: set minutes, start/pause, reset."""
     _init_countdown_timer_defaults()
@@ -881,6 +897,8 @@ def _render_practice_mode():
             with target_col:
                 q = qs[i]
                 st.markdown(f"**{i+1}. {q.prompt}**")
+                if getattr(q, "diagram_png", None):
+                    st.image(q.diagram_png, use_container_width=True)
                 if q.latex.strip():
                     st.latex(q.latex)
 
@@ -1093,6 +1111,8 @@ for topic in ordered_topics:
         _instruction_line(slot1)
 
         st.markdown(f"**{q1.prompt}**")
+        if getattr(q1, "diagram_png", None):
+            st.image(q1.diagram_png, use_container_width=True)
         if q1.latex.strip():
             st.latex(q1.latex)
 
@@ -1114,20 +1134,14 @@ for topic in ordered_topics:
         # Controls at bottom: N A W D I
         ctrl = st.columns(5)
         if ctrl[0].button("N", key=f"n__{slot1}", help="New version", type="secondary"):
-            # Regenerate BOTH questions so the pair remains matched (same type + same step/ratio)
-            level_id = st.session_state.topics_levels.get(topic, q1.level_id)
-            _regen_pair(topic, level_id, int(max_diff))
+            # Regenerate ONLY this question (keeps the same type via template_id).
+            _regen_one(topic, 0, int(max_diff))
 
-            # reset UI toggles for both sides
-            slot2 = _slot(topic, 1)
+            # reset UI toggles for this side
             st.session_state[ans1_key] = False
             st.session_state[work1_key] = False
             st.session_state[draw1_key] = False
             st.session_state[f"ink__{slot1}"] = "white"
-            st.session_state[f"ans__{slot2}"] = False
-            st.session_state[f"work__{slot2}"] = False
-            st.session_state[f"draw__{slot2}"] = False
-            st.session_state[f"ink__{slot2}"] = "white"
             st.rerun()
 
         if ctrl[1].button("A", key=f"a__{slot1}", help="Answer", type="secondary"):
@@ -1165,6 +1179,8 @@ for topic in ordered_topics:
             st.markdown("&nbsp;", unsafe_allow_html=True)
         else:
             st.markdown(f"**{q2.prompt}**")
+            if getattr(q2, "diagram_png", None):
+                st.image(q2.diagram_png, use_container_width=True)
             if q2.latex.strip():
                 st.latex(q2.latex)
 
@@ -1187,16 +1203,10 @@ for topic in ordered_topics:
         if st.session_state.get(show2_key, False):
             ctrl = st.columns(6)
             if ctrl[0].button("N", key=f"n__{slot2}", help="New version", type="secondary"):
-                # Regenerate BOTH questions so the pair remains matched (same type + same step/ratio)
-                level_id = st.session_state.topics_levels.get(topic, q2.level_id)
-                _regen_pair(topic, level_id, int(max_diff))
+                # Regenerate ONLY this question (keeps the same type via template_id).
+                _regen_one(topic, 1, int(max_diff))
 
-                # reset UI toggles for both sides
-                slot1b = _slot(topic, 0)
-                st.session_state[f"ans__{slot1b}"] = False
-                st.session_state[f"work__{slot1b}"] = False
-                st.session_state[f"draw__{slot1b}"] = False
-                st.session_state[f"ink__{slot1b}"] = "white"
+                # reset UI toggles for this side
                 st.session_state[ans2_key] = False
                 st.session_state[work2_key] = False
                 st.session_state[draw2_key] = False

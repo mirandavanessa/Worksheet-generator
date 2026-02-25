@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 import random
+import io
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from PIL import Image
+
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Callable, Dict, List, Tuple, Optional, Any
@@ -72,6 +79,7 @@ class GeneratedQuestion:
     prompt: str
     latex: str
     answer_latex: str
+    diagram_png: Optional[bytes]
     working: List[WorkingStep]
     template_id: str
     seed: int
@@ -716,6 +724,233 @@ def _gen_complete_square_a_not1(rng: random.Random, seed: int, params: Optional[
 # Templates / Levels
 # -----------------------------
 
+
+# --- Perimeter of rectilinear shapes (diagrams) ---
+
+def _poly_edges(points: List[Tuple[float, float]]) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    return list(zip(points, points[1:] + [points[0]]))
+
+
+def _render_rectilinear_png(
+    points: List[Tuple[float, float]],
+    edge_labels: Dict[str, str],
+    edge_ids: List[str],
+    dpi: int = 300,
+) -> bytes:
+    """Render a simple rectilinear polygon diagram with labelled edges."""
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    w = max(xs) - min(xs)
+    h = max(ys) - min(ys)
+
+    # Size scaled to keep labels readable
+    fig_w = max(2.8, min(4.2, 0.22 * w + 2.4))
+    fig_h = max(2.2, min(3.6, 0.22 * h + 1.9))
+
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    # Draw outline
+    px = xs + [xs[0]]
+    py = ys + [ys[0]]
+    ax.plot(px, py, color="black", linewidth=2.0)
+
+    # Place labels outside edges
+    edges = _poly_edges(points)
+    for eid, (p1, p2) in zip(edge_ids, edges):
+        lab = edge_labels.get(eid, "")
+        if not lab:
+            continue
+        x1, y1 = p1
+        x2, y2 = p2
+        mx, my = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+        dx, dy = (x2 - x1), (y2 - y1)
+
+        # Outward normal for CCW polygon: rotate clockwise
+        nx, ny = (dy, -dx)
+        norm = (nx**2 + ny**2) ** 0.5
+        if norm == 0:
+            continue
+        nx, ny = nx / norm, ny / norm
+
+        # Offset proportional to overall size
+        off = 0.35
+        ax.text(
+            mx + nx * off,
+            my + ny * off,
+            lab,
+            ha="center",
+            va="center",
+            fontsize=12,
+            fontweight="bold",
+            color="black",
+        )
+
+    pad = 0.9
+    ax.set_xlim(min(xs) - pad, max(xs) + pad)
+    ax.set_ylim(min(ys) - pad, max(ys) + pad)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight", pad_inches=0.08)
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
+def _gen_perim_rect(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    L = rng.randint(6, 18)
+    W = rng.randint(4, 14)
+
+    points = [(0, 0), (L, 0), (L, W), (0, W)]
+    edge_ids = ["bottom", "right", "top", "left"]
+    edge_labels = {
+        "bottom": f"{L} cm",
+        "top": f"{L} cm",
+        "left": f"{W} cm",
+        "right": f"{W} cm",
+    }
+    diagram = _render_rectilinear_png(points, edge_labels, edge_ids)
+
+    P = 2 * (L + W)
+    prompt = "Find the perimeter of the shape. Give your answer in cm:"
+    latex = ""  # diagram carries the information
+    answer = rf"{P}\,\mathrm{{cm}}"
+    working: List[WorkingStep] = [
+        ("text", "Add the lengths of the outside edges."),
+        ("math", rf"P = 2({L}+{W}) = {P}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_perim_notch_all(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    # Outer rectangle W x H with a notch of depth d on the right side (not at a corner)
+    W = rng.randint(10, 20)
+    H = rng.randint(8, 16)
+    d = rng.randint(2, 6)
+
+    y1 = rng.randint(2, H - 4)
+    y2 = rng.randint(y1 + 2, H - 2)
+    notch_h = y2 - y1
+
+    points = [(0, 0), (W, 0), (W, y1), (W - d, y1), (W - d, y2), (W, y2), (W, H), (0, H)]
+    edge_ids = ["bottom", "right_lower", "notch_in", "notch_vert", "notch_out", "right_upper", "top", "left"]
+
+    edge_labels = {
+        "bottom": f"{W} cm",
+        "top": f"{W} cm",
+        "left": f"{H} cm",
+        "right_lower": f"{y1} cm",
+        "notch_vert": f"{notch_h} cm",
+        "right_upper": f"{H - y2} cm",
+        "notch_in": f"{d} cm",
+        "notch_out": f"{d} cm",
+    }
+
+    diagram = _render_rectilinear_png(points, edge_labels, edge_ids)
+
+    P = 2 * W + 2 * H + 2 * d
+
+    prompt = "Find the perimeter of the shape. Give your answer in cm:"
+    latex = ""
+    answer = rf"{P}\,\mathrm{{cm}}"
+    working: List[WorkingStep] = [
+        ("text", "Add all the outside lengths."),
+        ("math", rf"P = {W} + {y1} + {d} + {notch_h} + {d} + {H - y2} + {W} + {H} = {P}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_perim_notch_missing(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    W = rng.randint(10, 20)
+    H = rng.randint(8, 16)
+    d = rng.randint(2, 6)
+
+    y1 = rng.randint(2, H - 5)
+    y2 = rng.randint(y1 + 2, H - 2)
+    notch_h = y2 - y1
+
+    # Make the upper segment missing
+    upper = H - y2
+
+    points = [(0, 0), (W, 0), (W, y1), (W - d, y1), (W - d, y2), (W, y2), (W, H), (0, H)]
+    edge_ids = ["bottom", "right_lower", "notch_in", "notch_vert", "notch_out", "right_upper", "top", "left"]
+
+    edge_labels = {
+        "bottom": f"{W} cm",
+        "top": f"{W} cm",
+        "left": f"{H} cm",
+        "right_lower": f"{y1} cm",
+        "notch_vert": f"{notch_h} cm",
+        "right_upper": "?",
+        "notch_in": f"{d} cm",
+        "notch_out": f"{d} cm",
+    }
+
+    diagram = _render_rectilinear_png(points, edge_labels, edge_ids)
+
+    P = 2 * W + 2 * H + 2 * d
+
+    prompt = "Find the perimeter of the shape. Some lengths are missing; work them out first:"
+    latex = ""
+    answer = rf"{P}\,\mathrm{{cm}}"
+
+    working: List[WorkingStep] = [
+        ("text", "First work out the missing side on the right."),
+        ("math", rf"? = {H} - {y1} - {notch_h} = {upper}"),
+        ("text", "Now add all the outside lengths."),
+        ("math", rf"P = {W} + {y1} + {d} + {notch_h} + {d} + {upper} + {W} + {H} = {P}"),
+    ]
+
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_perim_notch_givenP_findx(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    W = rng.randint(10, 20)
+    H = rng.randint(8, 16)
+
+    # unknown depth x appears twice
+    x = rng.randint(2, 6)
+
+    y1 = rng.randint(2, H - 5)
+    y2 = rng.randint(y1 + 2, H - 2)
+    notch_h = y2 - y1
+    upper = H - y2
+
+    P = 2 * W + 2 * H + 2 * x
+
+    points = [(0, 0), (W, 0), (W, y1), (W - x, y1), (W - x, y2), (W, y2), (W, H), (0, H)]
+    edge_ids = ["bottom", "right_lower", "notch_in", "notch_vert", "notch_out", "right_upper", "top", "left"]
+
+    edge_labels = {
+        "bottom": f"{W} cm",
+        "top": f"{W} cm",
+        "left": f"{H} cm",
+        "right_lower": f"{y1} cm",
+        "notch_vert": f"{notch_h} cm",
+        "right_upper": f"{upper} cm",
+        "notch_in": "x cm",
+        "notch_out": "x cm",
+    }
+
+    diagram = _render_rectilinear_png(points, edge_labels, edge_ids)
+
+    prompt = rf"The perimeter of the shape is {P} cm. Find x:"
+    latex = ""
+    answer = rf"x = {x}\,\mathrm{{cm}}"
+
+    working: List[WorkingStep] = [
+        ("text", "Write an equation for the perimeter."),
+        ("math", rf"{P} = 2\times {W} + 2\times {H} + 2x"),
+        ("math", rf"{P} = {2*W} + {2*H} + 2x"),
+        ("math", rf"2x = {P} - {2*W} - {2*H} = {2*x}"),
+        ("math", rf"x = {x}"),
+    ]
+
+    return prompt, latex, answer, working, diagram
+
 TEMPLATES: List[Template] = [
     # Continuing sequences levels (pair-locked step/ratio)
     Template(
@@ -725,7 +960,6 @@ TEMPLATES: List[Template] = [
         level_name="Add the same amount",
         difficulty=1,
         generator=_gen_seq_add,
-        pair_params_factory=lambda r: {"d": r.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12])},
     ),
     Template(
         template_id="seq_sub",
@@ -734,7 +968,6 @@ TEMPLATES: List[Template] = [
         level_name="Subtract the same amount",
         difficulty=2,
         generator=_gen_seq_sub,
-        pair_params_factory=lambda r: {"s": r.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12])},
     ),
     Template(
         template_id="seq_mul",
@@ -743,7 +976,6 @@ TEMPLATES: List[Template] = [
         level_name="Multiply by the same number",
         difficulty=3,
         generator=_gen_seq_mul,
-        pair_params_factory=lambda r: {"r": r.choice([2, 3])},
     ),
     Template(
         template_id="seq_div",
@@ -752,7 +984,6 @@ TEMPLATES: List[Template] = [
         level_name="Divide by the same number",
         difficulty=4,
         generator=_gen_seq_div,
-        pair_params_factory=lambda r: {"r": r.choice([2, 3])},
     ),
     Template(
         template_id="seq_fibo",
@@ -1025,6 +1256,41 @@ TEMPLATES: List[Template] = [
         4,
         lambda r, s, p: _gen_complete_square_a_not1(r, s, {"frac_inside": True}),
     ),
+
+    # Perimeter of rectilinear shapes
+    Template(
+        "perim_rect",
+        "Perimeter of rectilinear shapes",
+        "rect",
+        "Rectangle",
+        1,
+        _gen_perim_rect,
+    ),
+    Template(
+        "perim_notch_all",
+        "Perimeter of rectilinear shapes",
+        "all",
+        "All lengths given",
+        2,
+        _gen_perim_notch_all,
+    ),
+    Template(
+        "perim_notch_missing",
+        "Perimeter of rectilinear shapes",
+        "missing",
+        "Missing sides to work out",
+        3,
+        _gen_perim_notch_missing,
+    ),
+    Template(
+        "perim_notch_givenP_x",
+        "Perimeter of rectilinear shapes",
+        "givenP",
+        "Given perimeter, find x",
+        4,
+        _gen_perim_notch_givenP_findx,
+    ),
+
 ]
 
 
@@ -1078,7 +1344,12 @@ def generate_two_per_topic(
         qs: List[GeneratedQuestion] = []
         for j in range(2):
             qseed = master.randint(1, 10**9)
-            pr, latex, ans, working = tmpl.generator(random.Random(qseed), qseed, pair_params)
+            res = tmpl.generator(random.Random(qseed), qseed, pair_params)
+            if isinstance(res, tuple) and len(res) == 5:
+                pr, latex, ans, working, diagram = res
+            else:
+                pr, latex, ans, working = res
+                diagram = None
 
             pr = pr.strip()
             latex = _sanitize_math(latex)
@@ -1096,6 +1367,7 @@ def generate_two_per_topic(
                     prompt=pr,
                     latex=latex,
                     answer_latex=ans,
+                    diagram_png=diagram,
                     working=working2,
                     template_id=tmpl.template_id,
                     seed=qseed,
@@ -1117,7 +1389,12 @@ def regenerate_question(
     if tmpl is None:
         raise ValueError("Template not found for regeneration.")
 
-    pr, latex, ans, working = tmpl.generator(random.Random(new_seed), new_seed, fixed_params)
+    res = tmpl.generator(random.Random(new_seed), new_seed, fixed_params)
+    if isinstance(res, tuple) and len(res) == 5:
+        pr, latex, ans, working, diagram = res
+    else:
+        pr, latex, ans, working = res
+        diagram = None
 
     pr = pr.strip()
     latex = _sanitize_math(latex)
@@ -1134,6 +1411,7 @@ def regenerate_question(
         prompt=pr,
         latex=latex,
         answer_latex=ans,
+        diagram_png=diagram,
         working=working2,
         template_id=tmpl.template_id,
         seed=new_seed,
