@@ -2,6 +2,7 @@ import random
 import time
 import hashlib
 import streamlit as st
+import streamlit.components.v1 as components
 
 from question_bank import (
     available_topics,
@@ -34,7 +35,7 @@ st.markdown(
     """
 <style>
 /* Increase top padding so top controls are not hidden by Streamlit header */
-.block-container { padding-top: 3.2rem; }
+.block-container { padding-top: 3.8rem; }
 
 /* Shrink SECONDARY buttons (used for per-question micro-controls) */
 button[kind="secondary"] {
@@ -97,16 +98,33 @@ button[aria-label="Cycle instruction"] span {
 /* Floating timer (fixed top-right) */
 .floating-timer {
     position: fixed;
-    top: 3.20rem; /* below Streamlit header */
+    top: 4.15rem; /* below Streamlit header */
     right: 1.00rem;
     z-index: 10000;
     background: rgba(0,0,0,0.92);
     color: #FFFFFF;
     border: 1px solid rgba(255,255,255,0.25);
-    border-radius: 8px;
-    padding: 0.25rem 0.50rem;
+    border-radius: 10px;
+    padding: 0.55rem 0.85rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: 0.85rem;
+    font-size: 2.55rem;
+}
+
+@keyframes mw_flash {
+  0%, 49% {
+    background: rgba(220, 30, 30, 0.95);
+    border-color: rgba(255, 80, 80, 0.90);
+    box-shadow: 0 0 18px rgba(255, 80, 80, 0.55);
+  }
+  50%, 100% {
+    background: rgba(0,0,0,0.92);
+    border-color: rgba(255,255,255,0.25);
+    box-shadow: none;
+  }
+}
+
+.floating-timer.alarm {
+  animation: mw_flash 0.6s infinite;
 }
 </style>
 """,
@@ -141,22 +159,189 @@ def _set_default(key: str, default):
         st.session_state[key] = default
 
 
-# ---------------- Floating timer ----------------
-def _render_floating_timer():
-    # Start a stopwatch on first load
-    _set_default("timer_start", time.time())
+# ---------------- Floating timer (countdown) ----------------
+def _init_countdown_timer_defaults():
+    _set_default("timer_minutes", 2)
+    _set_default("timer_duration_sec", int(st.session_state.timer_minutes) * 60)
+    _set_default("timer_running", False)
+    _set_default("timer_start_ts", time.time())
+    _set_default("timer_elapsed_before", 0.0)
+    _set_default("timer_alarm", False)
+    _set_default("timer_audio_unlocked", False)
 
-    if _AUTOREFRESH_OK:
-        # Refresh once per second without blocking
+
+def _timer_elapsed_total() -> float:
+    elapsed = float(st.session_state.timer_elapsed_before)
+    if bool(st.session_state.timer_running):
+        elapsed += (time.time() - float(st.session_state.timer_start_ts))
+    return elapsed
+
+
+def _timer_remaining_sec() -> int:
+    duration = int(st.session_state.timer_duration_sec)
+    remaining = duration - int(_timer_elapsed_total())
+    return max(0, remaining)
+
+
+def _render_floating_timer():
+    _init_countdown_timer_defaults()
+
+    # Auto-refresh only while running
+    if bool(st.session_state.timer_running) and _AUTOREFRESH_OK:
         st_autorefresh(interval=1000, key="__timer_refresh__")
 
-    elapsed = int(time.time() - float(st.session_state.timer_start))
-    mm = elapsed // 60
-    ss = elapsed % 60
-    st.markdown(f"<div class='floating-timer'>{mm:02d}:{ss:02d}</div>", unsafe_allow_html=True)
+    remaining = _timer_remaining_sec()
+
+    # Stop automatically when it hits 0
+    if remaining == 0 and bool(st.session_state.timer_running):
+        st.session_state.timer_running = False
+        st.session_state.timer_elapsed_before = float(st.session_state.timer_duration_sec)
+
+    # Alarm becomes active once we actually reach 0
+    if remaining == 0 and (float(st.session_state.timer_elapsed_before) >= float(st.session_state.timer_duration_sec)):
+        st.session_state.timer_alarm = True
+    else:
+        st.session_state.timer_alarm = False
+
+    mm = remaining // 60
+    ss = remaining % 60
+
+    cls = "floating-timer alarm" if bool(st.session_state.timer_alarm) else "floating-timer"
+    st.markdown(f"<div class='{cls}'>{mm:02d}:{ss:02d}</div>", unsafe_allow_html=True)
+
+    # Best-effort buzzer at 0 (requires audio to be unlocked by a user gesture on many iOS devices)
+    if bool(st.session_state.timer_audio_unlocked):
+        alarm_flag = "true" if bool(st.session_state.timer_alarm) else "false"
+        components.html(
+            f"""
+<div style='display:none'></div>
+<script>
+(function() {{
+  window.__mwAudio = window.__mwAudio || {{}};
+  function getCtx() {{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!window.__mwAudio.ctx) window.__mwAudio.ctx = new AC();
+    const ctx = window.__mwAudio.ctx;
+    if (ctx.state === 'suspended') {{ try {{ ctx.resume(); }} catch(e) {{}} }}
+    return ctx;
+  }}
+
+  // Try to unlock audio context once (best-effort). Many iOS devices require a user gesture.
+  (function unlockOnce() {{
+    if (window.__mwAudio.unlocked) return;
+    const ctx = getCtx();
+    if (!ctx) return;
+    try {{
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      g.gain.value = 0.001;
+      o.connect(g); g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + 0.01);
+      window.__mwAudio.unlocked = true;
+    }} catch(e) {{}}
+  }})();
+
+  function beep() {{
+    const ctx = getCtx();
+    if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.value = 440;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+    o.connect(g); g.connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + 0.26);
+  }}
+
+  function startBuzz() {{
+    if (window.__mwAudio.buzzInterval) return;
+    beep();
+    window.__mwAudio.buzzInterval = setInterval(beep, 700);
+  }}
+
+  function stopBuzz() {{
+    if (window.__mwAudio.buzzInterval) {{
+      clearInterval(window.__mwAudio.buzzInterval);
+      window.__mwAudio.buzzInterval = null;
+    }}
+  }}
+
+  const alarmOn = {alarm_flag};
+  if (alarmOn) startBuzz(); else stopBuzz();
+}})();
+</script>
+""",
+            height=0,
+        )
 
 
-# ---------------- Global font scaling (main + practice) ----------------
+def _timer_controls_row(key_prefix: str):
+    """Controls shown near the top: set minutes, start/pause, reset."""
+    _init_countdown_timer_defaults()
+
+    cLbl, cM, cStart, cReset, _ = st.columns([1, 2, 1, 1, 7], gap="small")
+    with cLbl:
+        st.markdown("<div style='height:0.15rem'></div><div style='font-weight:700;'>min</div>", unsafe_allow_html=True)
+
+    with cM:
+        mins = st.number_input(
+            "Timer minutes",
+            min_value=1,
+            max_value=60,
+            value=int(st.session_state.timer_minutes),
+            step=1,
+            key=f"{key_prefix}__mins",
+            label_visibility="collapsed",
+            disabled=bool(st.session_state.timer_running),
+        )
+
+        # Apply minutes immediately when not running (treat as a reset)
+        if int(mins) != int(st.session_state.timer_minutes) and not bool(st.session_state.timer_running):
+            st.session_state.timer_minutes = int(mins)
+            st.session_state.timer_duration_sec = int(mins) * 60
+            st.session_state.timer_elapsed_before = 0.0
+            st.session_state.timer_start_ts = time.time()
+            st.session_state.timer_alarm = False
+            st.rerun()
+
+
+    with cStart:
+        label = "Pause" if bool(st.session_state.timer_running) else "Start"
+        if st.button(label, key=f"{key_prefix}__startpause", type="secondary"):
+            if bool(st.session_state.timer_running):
+                # Pause
+                now = time.time()
+                st.session_state.timer_elapsed_before = float(st.session_state.timer_elapsed_before) + (now - float(st.session_state.timer_start_ts))
+                st.session_state.timer_running = False
+            else:
+                # Start / resume
+                # Mark audio as unlocked by a user gesture (best-effort for iOS autoplay restrictions)
+                st.session_state.timer_audio_unlocked = True
+                # If already finished, restart from full duration
+                if _timer_remaining_sec() == 0:
+                    st.session_state.timer_duration_sec = int(st.session_state.timer_minutes) * 60
+                    st.session_state.timer_elapsed_before = 0.0
+                st.session_state.timer_start_ts = time.time()
+                st.session_state.timer_running = True
+                st.session_state.timer_alarm = False
+            st.rerun()
+
+    with cReset:
+        if st.button("Reset", key=f"{key_prefix}__reset", type="secondary"):
+            st.session_state.timer_running = False
+            st.session_state.timer_duration_sec = int(st.session_state.timer_minutes) * 60
+            st.session_state.timer_elapsed_before = 0.0
+            st.session_state.timer_start_ts = time.time()
+            st.session_state.timer_alarm = False
+            st.rerun()
+
+
+# ---------------- Global font scaling (main + practice) ---------------- (main + practice) ----------------
 def _render_scale_css(scale: float):
     st.markdown(
         f"""
@@ -294,6 +479,9 @@ def _render_practice_mode():
     # extra spacing at top (so controls aren't hidden)
     st.markdown("<div style='height: 1.6rem'></div>", unsafe_allow_html=True)
 
+    # timer controls under spacer
+    _timer_controls_row("practice_timer")
+
     # top controls row under spacer
     top = st.columns([1, 1, 1, 1, 8])
     if top[0].button("←", key="back_main", help="Back", type="secondary"):
@@ -424,6 +612,9 @@ if not topics:
 
 # Extra top space so nothing is clipped by the header
 st.markdown("<div style='height: 1.9rem'></div>", unsafe_allow_html=True)
+
+# timer controls under the spacer
+_timer_controls_row("main_timer")
 
 # Main-page font controls under the spacer
 _scale_controls_row("main_top")
