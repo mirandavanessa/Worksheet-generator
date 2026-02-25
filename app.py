@@ -6,6 +6,7 @@ import streamlit.components.v1 as components
 
 from question_bank import (
     available_topics,
+    available_levels,
     generate_two_per_topic,
     regenerate_question,
     generate_questions_by_template,
@@ -1000,6 +1001,29 @@ with st.sidebar:
     )
     max_diff = st.slider("Max difficulty", 1, 5, 3)
 
+    st.subheader("Levels")
+    # One level selector per chosen topic
+    topics_levels = {}
+    for _t in topics:
+        opts = available_levels(_t, max_difficulty=max_diff)
+        if not opts:
+            continue
+        # Persist choice per topic
+        safe = "".join(ch if ch.isalnum() else "_" for ch in _t)
+        key = f"level__{safe}"
+        ids = [x[0] for x in opts]
+        names = {x[0]: x[1] for x in opts}
+        if key not in st.session_state or st.session_state[key] not in ids:
+            st.session_state[key] = ids[0]
+        topics_levels[_t] = st.selectbox(
+            f"{_t}",
+            options=ids,
+            format_func=lambda k: names.get(k, k),
+            key=key,
+        )
+
+    st.session_state.topics_levels = topics_levels
+
     if "master_seed" not in st.session_state:
         st.session_state.master_seed = random.randint(1, 10**9)
 
@@ -1008,6 +1032,8 @@ with st.sidebar:
         if st.button("Regenerate ALL", type="primary"):
             st.session_state.master_seed = random.randint(1, 10**9)
             st.session_state.generated = None
+            st.session_state.pair_params_map = None
+            st.session_state.level_name_map = None
             st.session_state.pdf_cache = None
             st.session_state.pdf_fp = None
     with colB:
@@ -1039,26 +1065,43 @@ if st.session_state.mode == "practice":
 # ---------------- Main page ----------------
 seed = int(st.session_state.master_seed)
 
-if not topics:
+topics_levels = st.session_state.get("topics_levels", {})
+if not topics_levels:
     st.warning("Pick at least one topic in the sidebar.")
     st.stop()
 
 # Extra top space so nothing is clipped by the header
 st.markdown("<div style='height: 1.9rem'></div>", unsafe_allow_html=True)
 
-# timer controls under the spacer
-# Timer controls are accessed by tapping the floating timer (no separate row here)
-
-# Main-page font controls under the spacer
+# Main-page font controls under the spacer (default is MAX)
 _scale_controls_row("main_top")
 
+# If topic/level settings changed, regenerate
+settings_fp = hashlib.sha1(repr((seed, int(max_diff), tuple(sorted(topics_levels.items())))).encode()).hexdigest()
+if st.session_state.get("settings_fp") != settings_fp:
+    st.session_state.settings_fp = settings_fp
+    st.session_state.generated = None
+    st.session_state.pair_params_map = None
+    st.session_state.level_name_map = None
+    st.session_state.pdf_cache = None
+    st.session_state.pdf_fp = None
+
 if "generated" not in st.session_state or st.session_state.generated is None:
-    st.session_state.generated = generate_two_per_topic(topics=topics, max_difficulty=max_diff, seed=seed)
+    grouped, pair_params_map, level_name_map = generate_two_per_topic(
+        topics_levels=topics_levels,
+        max_difficulty=int(max_diff),
+        seed=seed,
+    )
+    st.session_state.generated = grouped
+    st.session_state.pair_params_map = pair_params_map
+    st.session_state.level_name_map = level_name_map
     st.session_state.pdf_cache = None
     st.session_state.pdf_fp = None
 
 grouped = st.session_state.generated
-ordered_topics = [t for t in topics if t in grouped]
+pair_params_map = st.session_state.get("pair_params_map") or {}
+level_name_map = st.session_state.get("level_name_map") or {}
+ordered_topics = [t for t in topics_levels.keys() if t in grouped]
 
 # slightly more space before first topic (as requested)
 st.markdown("<div style='height: 1.4rem'></div>", unsafe_allow_html=True)
@@ -1072,7 +1115,8 @@ for topic in ordered_topics:
         st.info(f"{topic}: not enough templates found at the selected difficulty.")
         continue
 
-    st.markdown(f"#### {topic}")
+    lvl = level_name_map.get(topic, "")
+    st.markdown(f"#### {topic}" + (f" — {lvl}" if lvl else ""))
 
     # Default: hide the second question until revealed
     show2_key = f"show2__{_slot(topic, 1)}"
@@ -1117,7 +1161,7 @@ for topic in ordered_topics:
         if ctrl[0].button("N", key=f"n__{slot1}", help="New version", type="secondary"):
             new_seed = random.randint(1, 10**9)
             grouped[topic][0] = regenerate_question(
-                topic=topic, template_id=q1.template_id, max_difficulty=max_diff, new_seed=new_seed
+                topic=topic, template_id=q1.template_id, max_difficulty=max_diff, new_seed=new_seed, fixed_params=pair_params_map.get(topic)
             )
             st.session_state[ans1_key] = False
             st.session_state[work1_key] = False
@@ -1187,7 +1231,7 @@ for topic in ordered_topics:
             if ctrl[0].button("N", key=f"n__{slot2}", help="New version", type="secondary"):
                 new_seed = random.randint(1, 10**9)
                 grouped[topic][1] = regenerate_question(
-                    topic=topic, template_id=q2.template_id, max_difficulty=max_diff, new_seed=new_seed
+                    topic=topic, template_id=q2.template_id, max_difficulty=max_diff, new_seed=new_seed, fixed_params=pair_params_map.get(topic)
                 )
                 st.session_state[ans2_key] = False
                 st.session_state[work2_key] = False
@@ -1242,7 +1286,7 @@ if ordered_topics:
     if st.session_state.get("pdf_fp") != fp or st.session_state.get("pdf_cache") is None:
         st.session_state.pdf_cache = build_pdf_bytes(
             title=pdf_title,
-            grouped={t: grouped[t] for t in ordered_topics},
+            grouped={ (f"{t} — {level_name_map.get(t, )}" if level_name_map.get(t, ) else t): grouped[t] for t in ordered_topics },
             seed=seed,
         )
         st.session_state.pdf_fp = fp
