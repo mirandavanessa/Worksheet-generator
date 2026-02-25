@@ -45,14 +45,18 @@ def _lin_expr(a: int, b: int, var: str = "x") -> str:
 
 
 def _sequence_str(seq: List[int]) -> str:
-    return ",\\ ".join(str(x) for x in seq) + r",\\ \\ldots"
+    # Use thin-spaces (\,) between terms to avoid accidental line-breaks (\\)
+    # and to keep output compatible with both KaTeX (Streamlit) and matplotlib mathtext.
+    return ",\\,".join(str(x) for x in seq) + r",\\,\\ldots"
 
 
 def _sanitize_math(s: str) -> str:
-    # Defensive clean-up (avoid stray control chars from copy/paste)
+    """Sanitise LaTeX so it works in both Streamlit (KaTeX) and Matplotlib mathtext."""
     return (
         s.replace("\t", " ")
         .replace("\x0c", "")
+        # collapse accidental double-backslashes (e.g. \frac, \times, or line-breaks)
+        .replace("\\\\", "\\")
         .replace("\\tfrac", "\\frac")
         .replace("\\dfrac", "\\frac")
     )
@@ -96,10 +100,10 @@ def _gen_seq_add(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]
     nxt = [seq[-1] + d, seq[-1] + 2 * d]
     prompt = "Write the next two terms:"
     latex = _sequence_str(seq)
-    answer = f"{nxt[0]},\\ {nxt[1]}"
+    answer = f"{nxt[0]},\\, {nxt[1]}"
     working = [
         ("text", f"The common difference is {d}."),
-        ("math", rf"{seq[-1]}+{d}={nxt[0]},\\ {nxt[0]}+{d}={nxt[1]}"),
+        ("math", rf"{seq[-1]}+{d}={nxt[0]}\\quad {nxt[0]}+{d}={nxt[1]}"),
     ]
     return prompt, latex, answer, working
 
@@ -112,10 +116,10 @@ def _gen_seq_sub(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]
     nxt = [seq[-1] + d, seq[-1] + 2 * d]
     prompt = "Write the next two terms:"
     latex = _sequence_str(seq)
-    answer = f"{nxt[0]},\\ {nxt[1]}"
+    answer = f"{nxt[0]},\\, {nxt[1]}"
     working = [
         ("text", f"The common difference is {d}."),
-        ("math", rf"{seq[-1]}{d}={nxt[0]},\\ {nxt[0]}{d}={nxt[1]}"),
+        ("math", rf"{seq[-1]}{d}={nxt[0]}\\quad {nxt[0]}{d}={nxt[1]}"),
     ]
     return prompt, latex, answer, working
 
@@ -129,10 +133,10 @@ def _gen_seq_mul(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]
     nxt = [seq[-1] * r, seq[-1] * r * r]
     prompt = "Write the next two terms:"
     latex = _sequence_str(seq)
-    answer = f"{nxt[0]},\\ {nxt[1]}"
+    answer = f"{nxt[0]},\\, {nxt[1]}"
     working = [
         ("text", f"Multiply by {r} each time."),
-        ("math", rf"{seq[-1]}\\times {r}={nxt[0]},\\ {nxt[0]}\\times {r}={nxt[1]}"),
+        ("math", rf"{seq[-1]}\\times {r}={nxt[0]}\\quad {nxt[0]}\\times {r}={nxt[1]}"),
     ]
     return prompt, latex, answer, working
 
@@ -147,10 +151,10 @@ def _gen_seq_div(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]
     nxt = [seq[-1] // r, seq[-1] // (r * r)]
     prompt = "Write the next two terms:"
     latex = _sequence_str(seq)
-    answer = f"{nxt[0]},\\ {nxt[1]}"
+    answer = f"{nxt[0]},\\, {nxt[1]}"
     working = [
         ("text", f"Divide by {r} each time."),
-        ("math", rf"{seq[-1]}\\div {r}={nxt[0]},\\ {nxt[0]}\\div {r}={nxt[1]}"),
+        ("math", rf"{seq[-1]}\\div {r}={nxt[0]}\\quad {nxt[0]}\\div {r}={nxt[1]}"),
     ]
     return prompt, latex, answer, working
 
@@ -165,10 +169,10 @@ def _gen_seq_fibo(rng: random.Random, seed: int, params: Optional[Dict[str, Any]
     nxt2 = nxt1 + seq[-1]
     prompt = "Write the next two terms:"
     latex = _sequence_str(seq)
-    answer = f"{nxt1},\\ {nxt2}"
+    answer = f"{nxt1},\\, {nxt2}"
     working = [
         ("text", "Each term is the sum of the previous two terms."),
-        ("math", rf"{seq[-2]}+{seq[-1]}={nxt1},\\ {seq[-1]}+{nxt1}={nxt2}"),
+        ("math", rf"{seq[-2]}+{seq[-1]}={nxt1}\\quad {seq[-1]}+{nxt1}={nxt2}"),
     ]
     return prompt, latex, answer, working
 
@@ -247,6 +251,57 @@ def _gen_use_nth_find_n(rng: random.Random, seed: int, params: Optional[Dict[str
     return prompt, latex, answer, working
 
 
+
+
+# --- Using the nth term (check membership) ---
+
+def _gen_use_nth_is_term(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Given an nth term, decide whether a value is a term of the sequence."""
+    a_sign = int(params.get("a_sign", 1)) if params else 1
+    A = a_sign * rng.choice([2, 3, 4, 5, 6, 7, 8, 9])
+    B = rng.randint(-20, 20)
+    expr = _lin_expr(A, B, "n")
+
+    n_true = rng.choice([6, 7, 8, 9, 10, 12, 15])
+    term = A * n_true + B
+
+    make_yes = rng.random() < 0.6
+    if make_yes:
+        target = term
+    else:
+        # choose an offset so the resulting n is not an integer
+        offset = rng.choice([1, 2, 3, 4, 5, 6, 7, 8, 9])
+        divisor = abs(A)
+        target = term + offset
+        for _ in range(30):
+            if (target - B) % divisor != 0:
+                break
+            target += 1
+
+    prompt = f"The nth term is shown. Is {target} a term?"
+    latex = expr
+
+    rhs = target - B
+    frac = Fraction(rhs, A)  # reduced; denominator positive
+    frac_tex = _fmt_frac(frac)
+
+    sign = "+" if B >= 0 else "-"
+
+    working: List[WorkingStep] = [
+        ("math", rf"{expr} = {target}"),
+        ("math", rf"{A}n {sign} {abs(B)} = {target}"),
+        ("math", rf"{A}n = {rhs}"),
+        ("math", rf"n = \frac{{{rhs}}}{{{A}}} = {frac_tex}"),
+    ]
+
+    if frac.denominator == 1 and frac.numerator > 0:
+        answer = rf"\mathrm{{Yes}},\ n = {frac.numerator}"
+        working.append(("text", "n is a positive integer, so it is a term."))
+    else:
+        answer = r"\mathrm{No}"
+        working.append(("text", "n is not a positive integer, so it is not a term."))
+
+    return prompt, latex, answer, working
 # --- Solving 1-step equations ---
 
 def _gen_eq_1_add(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
@@ -393,7 +448,7 @@ def _gen_pct_noncalc(rng: random.Random, seed: int, params: Optional[Dict[str, A
             working = [("text", "10% is one tenth."), ("math", rf"{amount}\\div 10 = {amount//10}")]
         elif pct == 20:
             working = [
-                ("text", "20% = 2 \\times 10%."),
+                ("text", "20% is twice 10%."),
                 ("math", rf"10\\%:\\ {amount}\\div 10 = {amount//10}"),
                 ("math", rf"20\\%:\\ 2\\times {amount//10} = {ans}"),
             ]
@@ -420,7 +475,7 @@ def _gen_pct_noncalc(rng: random.Random, seed: int, params: Optional[Dict[str, A
             working = [("text", "12.5% is one eighth."), ("math", rf"{amount}\\div 8 = {eighth}")]
         else:
             working = [
-                ("text", "37.5% = 3 \\times 12.5%."),
+                ("text", "37.5% is 3 times 12.5%."),
                 ("math", rf"12.5\\%:\\ {amount}\\div 8 = {eighth}"),
                 ("math", rf"37.5\\%:\\ 3\\times {eighth} = {ans}"),
             ]
@@ -749,6 +804,23 @@ TEMPLATES: List[Template] = [
         generator=lambda r, s, p: _gen_use_nth_find_n(r, s, {"a_sign": -1}),
     ),
 
+
+    Template(
+        template_id="use_is_term_pos",
+        topic="Using the nth term",
+        level_id="is_term_pos",
+        level_name="Is a value a term? (positive coefficient)",
+        difficulty=5,
+        generator=lambda r, s, p: _gen_use_nth_is_term(r, s, {"a_sign": 1}),
+    ),
+    Template(
+        template_id="use_is_term_neg",
+        topic="Using the nth term",
+        level_id="is_term_neg",
+        level_name="Is a value a term? (negative coefficient)",
+        difficulty=5,
+        generator=lambda r, s, p: _gen_use_nth_is_term(r, s, {"a_sign": -1}),
+    ),
     # 1-step equations
     Template("eq1_add", "Solving 1 step equations", "add", "x + b = c", 1, _gen_eq_1_add),
     Template("eq1_sub", "Solving 1 step equations", "sub", "x - b = c", 2, _gen_eq_1_sub),
