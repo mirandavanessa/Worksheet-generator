@@ -206,6 +206,303 @@ def _set_default(key: str, default):
 
 
 # ---------------- Floating timer (countdown) ----------------
+
+def _inject_overlay_timer():
+    """Inject a truly floating countdown timer (fixed to viewport) using parent-DOM JS.
+
+    This avoids relying on Streamlit button attributes/selectors that can break on iPad/Safari.
+    """
+    components.html(
+        r"""
+<div style="display:none"></div>
+<script>
+(function () {
+  // Inject into the parent document (Streamlit app page), not the component iframe.
+  const doc = window.parent.document;
+  if (doc.getElementById("mw-floating-timer")) return;
+
+  const style = doc.createElement("style");
+  style.id = "mw-floating-timer-style";
+  style.textContent = `
+    #mw-floating-timer{
+      position:fixed;
+      top:7.15rem;          /* moved down to clear Streamlit top bar on iPad */
+      right:1.00rem;
+      z-index:999999;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      user-select:none;
+      -webkit-user-select:none;
+      -webkit-touch-callout:none;
+    }
+    #mw-timer-display{
+      background: rgba(0,0,0,0.92);
+      color:#fff;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 12px;
+      padding: 0.55rem 0.85rem;
+      font-size: 2.70rem;   /* ~3x */
+      line-height: 1;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+    }
+    #mw-timer-panel{
+      margin-top: 0.45rem;
+      background: rgba(0,0,0,0.92);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 12px;
+      padding: 0.55rem 0.65rem;
+      display:none;
+      color:#fff;
+      width: 13.5rem;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.30);
+    }
+    #mw-timer-panel label{
+      display:block;
+      font-size: 0.82rem;
+      opacity: 0.85;
+      margin-bottom: 0.12rem;
+    }
+    #mw-timer-row{
+      display:flex;
+      gap:0.45rem;
+      align-items:center;
+      margin-bottom:0.45rem;
+    }
+    #mw-timer-row input{
+      width: 5.9rem;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 10px;
+      color:#fff;
+      padding: 0.35rem 0.45rem;
+      font-size: 0.95rem;
+    }
+    #mw-timer-btns{
+      display:flex;
+      gap:0.45rem;
+      align-items:center;
+      justify-content:space-between;
+    }
+    #mw-timer-btns button{
+      flex: 1 1 auto;
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 10px;
+      color:#fff;
+      padding: 0.35rem 0.45rem;
+      font-size: 0.92rem;
+      cursor:pointer;
+    }
+    #mw-timer-btns button:active{ transform: translateY(1px); }
+    @keyframes mwFlash {
+      0% { box-shadow: 0 0 0 rgba(255,0,0,0); filter:none; }
+      50% { box-shadow: 0 0 22px rgba(255,0,0,0.65); filter: brightness(1.25); }
+      100% { box-shadow: 0 0 0 rgba(255,0,0,0); filter:none; }
+    }
+    .mw-alarm #mw-timer-display{
+      animation: mwFlash 0.55s infinite;
+      border-color: rgba(255,0,0,0.55);
+    }
+  `;
+  doc.head.appendChild(style);
+
+  const root = doc.createElement("div");
+  root.id = "mw-floating-timer";
+  root.innerHTML = `
+    <div id="mw-timer-display" aria-label="Timer">00:30</div>
+    <div id="mw-timer-panel" aria-label="Timer controls">
+      <div id="mw-timer-row">
+        <div style="flex:1 1 auto">
+          <label>Minutes</label>
+          <input id="mw-min" type="number" min="0" max="999" step="1" inputmode="numeric"/>
+        </div>
+        <div style="flex:1 1 auto">
+          <label>Seconds</label>
+          <input id="mw-sec" type="number" min="0" max="59" step="1" inputmode="numeric"/>
+        </div>
+      </div>
+      <div id="mw-timer-btns">
+        <button id="mw-start">Start</button>
+        <button id="mw-reset">Reset</button>
+      </div>
+    </div>
+  `;
+  doc.body.appendChild(root);
+
+  const display = doc.getElementById("mw-timer-display");
+  const panel = doc.getElementById("mw-timer-panel");
+  const minInput = doc.getElementById("mw-min");
+  const secInput = doc.getElementById("mw-sec");
+  const startBtn = doc.getElementById("mw-start");
+  const resetBtn = doc.getElementById("mw-reset");
+
+  // State (persist duration across reruns)
+  const LS_KEY = "mw_timer_state_v2";
+  function loadState(){
+    try{
+      const s = JSON.parse(window.localStorage.getItem(LS_KEY) || "{}");
+      return {
+        minutes: Number.isFinite(s.minutes) ? s.minutes : 0,
+        seconds: Number.isFinite(s.seconds) ? s.seconds : 30,
+      };
+    } catch(e){
+      return {minutes:0, seconds:30};
+    }
+  }
+  function saveState(minutes, seconds){
+    try{ window.localStorage.setItem(LS_KEY, JSON.stringify({minutes, seconds})); } catch(e){}
+  }
+
+  let {minutes, seconds} = loadState();
+  minutes = Math.max(0, minutes|0);
+  seconds = Math.max(0, seconds|0);
+  if (seconds > 59) seconds = 59;
+
+  minInput.value = String(minutes);
+  secInput.value = String(seconds);
+
+  let durationMs = (minutes*60 + seconds) * 1000;
+  if (durationMs <= 0) durationMs = 30*1000;
+  let remainingMs = durationMs;
+
+  let running = false;
+  let endAt = null;
+  let tickHandle = null;
+
+  // Audio (buzz at 0): best-effort on iOS (requires user gesture)
+  let audioCtx = null;
+  let buzzInterval = null;
+  function getCtx(){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === "suspended") { try { audioCtx.resume(); } catch(e){} }
+    return audioCtx;
+  }
+  function beep(){
+    const ctx = getCtx();
+    if (!ctx) return;
+    try{
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "square";
+      o.frequency.value = 440;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.22);
+      o.connect(g); g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + 0.24);
+    } catch(e){}
+  }
+  function startBuzz(){
+    if (buzzInterval) return;
+    beep();
+    buzzInterval = setInterval(beep, 700);
+  }
+  function stopBuzz(){
+    if (buzzInterval){ clearInterval(buzzInterval); buzzInterval = null; }
+  }
+
+  function fmt(ms){
+    const total = Math.max(0, Math.ceil(ms/1000));
+    const mm = Math.floor(total/60);
+    const ss = total % 60;
+    return String(mm).padStart(2,"0")+":"+String(ss).padStart(2,"0");
+  }
+  function render(){ display.textContent = fmt(remainingMs); }
+
+  function setAlarm(on){
+    if (on) root.classList.add("mw-alarm");
+    else root.classList.remove("mw-alarm");
+  }
+
+  function stopTimer(){
+    running = false;
+    endAt = null;
+    if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+    startBtn.textContent = "Start";
+  }
+
+  function tick(){
+    if (!running) return;
+    remainingMs = Math.max(0, endAt - Date.now());
+    render();
+    if (remainingMs <= 0){
+      stopTimer();
+      setAlarm(true);
+      startBuzz();
+    }
+  }
+
+  function startTimer(){
+    getCtx(); // user-gesture unlock best-effort
+    stopBuzz();
+    setAlarm(false);
+    if (remainingMs <= 0) remainingMs = durationMs;
+    running = true;
+    endAt = Date.now() + remainingMs;
+    startBtn.textContent = "Pause";
+    if (!tickHandle) tickHandle = setInterval(tick, 200);
+  }
+
+  function pauseTimer(){
+    if (!running) return;
+    remainingMs = Math.max(0, endAt - Date.now());
+    stopTimer();
+    render();
+  }
+
+  function applyDurationFromInputs(){
+    let m = parseInt(minInput.value || "0", 10);
+    let s = parseInt(secInput.value || "0", 10);
+    if (!Number.isFinite(m) || m < 0) m = 0;
+    if (!Number.isFinite(s) || s < 0) s = 0;
+    if (s > 59) s = 59;
+    minutes = m; seconds = s;
+    minInput.value = String(minutes);
+    secInput.value = String(seconds);
+    saveState(minutes, seconds);
+
+    durationMs = (minutes*60 + seconds) * 1000;
+    if (durationMs <= 0) durationMs = 30*1000;
+
+    remainingMs = durationMs;
+    stopBuzz();
+    setAlarm(false);
+    stopTimer();
+    render();
+  }
+
+  // Click timer display to toggle panel
+  display.addEventListener("click", function(){
+    getCtx();
+    panel.style.display = (panel.style.display === "none" || panel.style.display === "") ? "block" : "none";
+  });
+
+  // Only apply duration changes when not running
+  minInput.addEventListener("change", function(){ if (!running) applyDurationFromInputs(); });
+  secInput.addEventListener("change", function(){ if (!running) applyDurationFromInputs(); });
+
+  startBtn.addEventListener("click", function(){
+    getCtx();
+    if (running) pauseTimer();
+    else startTimer();
+  });
+
+  resetBtn.addEventListener("click", function(){
+    getCtx();
+    applyDurationFromInputs();
+  });
+
+  render();
+})();
+</script>
+""",
+        height=0,
+    )
+
 def _init_countdown_timer_defaults():
     _set_default("timer_minutes", 2)
     _set_default("timer_seconds", 0)
@@ -731,8 +1028,8 @@ if "mode" not in st.session_state:
 _set_default("ui_scale", 1.70)
 _render_scale_css(float(st.session_state.ui_scale))
 
-# floating timer (all pages)
-_render_floating_timer()
+# floating timer (all pages) - injected overlay (robust on iPad/Safari)
+_inject_overlay_timer()
 
 if st.session_state.mode == "practice":
     _render_practice_mode()
