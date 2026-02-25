@@ -31,6 +31,34 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
+# ---------- Callbacks ----------
+def _shift_level(topic: str, delta: int, ids: list[str], safe_topic: str, max_diff: int, seed: int) -> None:
+    """Shift the selected level for a topic without triggering Streamlit session_state errors."""
+    if not ids:
+        return
+    key_level = f"level__{safe_topic}"
+    cur = st.session_state.get(key_level, ids[0])
+    try:
+        idx = ids.index(cur)
+    except ValueError:
+        idx = 0
+    new_idx = max(0, min(len(ids) - 1, idx + delta))
+    new_level_id = ids[new_idx]
+
+    # Update the widget-backed key BEFORE widgets are created on rerun (callback runs pre-rerun)
+    st.session_state[key_level] = new_level_id
+    if "topics_levels" not in st.session_state or not isinstance(st.session_state.topics_levels, dict):
+        st.session_state.topics_levels = {}
+    st.session_state.topics_levels[topic] = new_level_id
+
+    # Clear caches so questions regenerate cleanly
+    st.session_state.generated = None
+    st.session_state.pair_params_map = None
+    st.session_state.level_name_map = None
+    st.session_state.pdf_cache = None
+    st.session_state.pdf_fp = None
+
+
 # ---------- CSS: minimal distraction controls + instruction cycle + floating timer ----------
 st.markdown(
     """
@@ -1130,59 +1158,23 @@ for topic in ordered_topics:
 
     key_level = f"level__{safe_topic}"
     if ids and len(ids) > 1:
-        if h2.button("−", key=f"lvlm__{safe_topic}", help="Previous level", type="secondary"):
-            idx = ids.index(cur_level_id) if cur_level_id in ids else 0
-            new_level_id = ids[max(0, idx - 1)]
-            st.session_state[key_level] = new_level_id
-            st.session_state.topics_levels[topic] = new_level_id
+        h2.button(
+            "−",
+            key=f"lvlm__{safe_topic}",
+            help="Previous level",
+            type="secondary",
+            on_click=_shift_level,
+            args=(topic, -1, ids, safe_topic, int(max_diff), seed),
+        )
+        h3.button(
+            "+",
+            key=f"lvlp__{safe_topic}",
+            help="Next level",
+            type="secondary",
+            on_click=_shift_level,
+            args=(topic, +1, ids, safe_topic, int(max_diff), seed),
+        )
 
-            sub_grouped, sub_params, sub_lvl_map = generate_two_per_topic(
-                topics_levels={topic: new_level_id},
-                max_difficulty=int(max_diff),
-                seed=seed,
-            )
-            if sub_grouped.get(topic):
-                grouped[topic] = sub_grouped[topic]
-                pair_params_map[topic] = sub_params.get(topic)
-                level_name_map[topic] = sub_lvl_map.get(topic, "")
-                st.session_state.generated = grouped
-                st.session_state.pair_params_map = pair_params_map
-                st.session_state.level_name_map = level_name_map
-
-            new_fp = hashlib.sha1(
-                repr((seed, int(max_diff), tuple(sorted(st.session_state.topics_levels.items())))).encode()
-            ).hexdigest()
-            st.session_state.settings_fp = new_fp
-            st.session_state.pdf_cache = None
-            st.session_state.pdf_fp = None
-            st.rerun()
-
-        if h3.button("+", key=f"lvlp__{safe_topic}", help="Next level", type="secondary"):
-            idx = ids.index(cur_level_id) if cur_level_id in ids else 0
-            new_level_id = ids[min(len(ids) - 1, idx + 1)]
-            st.session_state[key_level] = new_level_id
-            st.session_state.topics_levels[topic] = new_level_id
-
-            sub_grouped, sub_params, sub_lvl_map = generate_two_per_topic(
-                topics_levels={topic: new_level_id},
-                max_difficulty=int(max_diff),
-                seed=seed,
-            )
-            if sub_grouped.get(topic):
-                grouped[topic] = sub_grouped[topic]
-                pair_params_map[topic] = sub_params.get(topic)
-                level_name_map[topic] = sub_lvl_map.get(topic, "")
-                st.session_state.generated = grouped
-                st.session_state.pair_params_map = pair_params_map
-                st.session_state.level_name_map = level_name_map
-
-            new_fp = hashlib.sha1(
-                repr((seed, int(max_diff), tuple(sorted(st.session_state.topics_levels.items())))).encode()
-            ).hexdigest()
-            st.session_state.settings_fp = new_fp
-            st.session_state.pdf_cache = None
-            st.session_state.pdf_fp = None
-            st.rerun()
 
 
     # Default: hide the second question until revealed
