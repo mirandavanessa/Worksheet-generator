@@ -95,19 +95,68 @@ button[aria-label="Cycle instruction"] span {
     line-height: 1 !important;
 }
 
-/* Floating timer (fixed top-right) */
-.floating-timer {
+/* Floating timer trigger + panel (fixed top-right). We target by unique title/aria-label strings. */
+div[data-testid="stButton"]:has(button[title="MW_TIMER_TOGGLE"]) {
     position: fixed;
-    top: 4.15rem; /* below Streamlit header */
+    top: 5.25rem;   /* moved down to avoid Streamlit header */
     right: 1.00rem;
     z-index: 10000;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+button[title="MW_TIMER_TOGGLE"] {
     background: rgba(0,0,0,0.92);
     color: #FFFFFF;
     border: 1px solid rgba(255,255,255,0.25);
-    border-radius: 10px;
-    padding: 0.55rem 0.85rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: 2.55rem;
+    border-radius: 14px !important;
+    padding: 0.72rem 1.05rem !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
+    font-size: 5.8rem !important; /* ~3x larger */
+    line-height: 1 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+}
+
+/* Panel inputs */
+div[data-testid="stNumberInput"]:has(input[aria-label="MW_TIMER_MIN"]) {
+    position: fixed;
+    top: 12.75rem;
+    right: 10.60rem;
+    z-index: 10000;
+    width: 6.20rem;
+}
+div[data-testid="stNumberInput"]:has(input[aria-label="MW_TIMER_SEC"]) {
+    position: fixed;
+    top: 12.75rem;
+    right: 3.55rem;
+    z-index: 10000;
+    width: 6.20rem;
+}
+
+/* Panel buttons */
+div[data-testid="stButton"]:has(button[title="MW_TIMER_STARTPAUSE"]) {
+    position: fixed;
+    top: 16.05rem;
+    right: 10.60rem;
+    z-index: 10000;
+}
+div[data-testid="stButton"]:has(button[title="MW_TIMER_RESET"]) {
+    position: fixed;
+    top: 16.05rem;
+    right: 3.55rem;
+    z-index: 10000;
+}
+
+/* Compact styling for timer inputs/buttons */
+div[data-testid="stNumberInput"]:has(input[aria-label^="MW_TIMER_"]) input {
+    font-size: 1.15rem !important;
+    height: 2.35rem !important;
+}
+button[title^="MW_TIMER_"]:not([title="MW_TIMER_TOGGLE"]) {
+    background: rgba(0,0,0,0.92) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
 }
 
 @keyframes mw_flash {
@@ -123,9 +172,7 @@ button[aria-label="Cycle instruction"] span {
   }
 }
 
-.floating-timer.alarm {
-  animation: mw_flash 0.6s infinite;
-}
+/* Alarm flash is applied to the timer toggle button via a conditional style injection */
 </style>
 """,
     unsafe_allow_html=True,
@@ -162,12 +209,14 @@ def _set_default(key: str, default):
 # ---------------- Floating timer (countdown) ----------------
 def _init_countdown_timer_defaults():
     _set_default("timer_minutes", 2)
-    _set_default("timer_duration_sec", int(st.session_state.timer_minutes) * 60)
+    _set_default("timer_seconds", 0)
+    _set_default("timer_duration_sec", int(st.session_state.timer_minutes) * 60 + int(st.session_state.timer_seconds))
     _set_default("timer_running", False)
     _set_default("timer_start_ts", time.time())
     _set_default("timer_elapsed_before", 0.0)
     _set_default("timer_alarm", False)
     _set_default("timer_audio_unlocked", False)
+    _set_default("timer_panel_open", False)
 
 
 def _timer_elapsed_total() -> float:
@@ -186,8 +235,8 @@ def _timer_remaining_sec() -> int:
 def _render_floating_timer():
     _init_countdown_timer_defaults()
 
-    # Auto-refresh only while running
-    if bool(st.session_state.timer_running) and _AUTOREFRESH_OK:
+    # Auto-refresh only while running AND panel closed (avoids disruptive reruns while editing)
+    if bool(st.session_state.timer_running) and (not bool(st.session_state.timer_panel_open)) and _AUTOREFRESH_OK:
         st_autorefresh(interval=1000, key="__timer_refresh__")
 
     remaining = _timer_remaining_sec()
@@ -206,8 +255,96 @@ def _render_floating_timer():
     mm = remaining // 60
     ss = remaining % 60
 
-    cls = "floating-timer alarm" if bool(st.session_state.timer_alarm) else "floating-timer"
-    st.markdown(f"<div class='{cls}'>{mm:02d}:{ss:02d}</div>", unsafe_allow_html=True)
+    # Alarm styling applied to the timer toggle button via a conditional style injection
+    if bool(st.session_state.timer_alarm):
+        st.markdown(
+            """
+<style>
+button[title="MW_TIMER_TOGGLE"] { animation: mw_flash 0.6s infinite !important; }
+</style>
+""",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            """
+<style>
+button[title="MW_TIMER_TOGGLE"] { animation: none !important; box-shadow: none !important; }
+</style>
+""",
+            unsafe_allow_html=True,
+        )
+
+    # Clicking the timer toggles the panel (controls live under the timer)
+    if st.button(f"{mm:02d}:{ss:02d}", key="mw_timer_toggle", type="secondary", help="MW_TIMER_TOGGLE"):
+        st.session_state.timer_panel_open = not bool(st.session_state.timer_panel_open)
+        st.rerun()
+
+    # Timer controls shown only when the panel is open
+    if bool(st.session_state.timer_panel_open):
+        mins = st.number_input(
+            "MW_TIMER_MIN",
+            min_value=0,
+            max_value=120,
+            value=int(st.session_state.timer_minutes),
+            step=1,
+            key="mw_timer_min",
+            label_visibility="collapsed",
+            disabled=bool(st.session_state.timer_running),
+        )
+        secs = st.number_input(
+            "MW_TIMER_SEC",
+            min_value=0,
+            max_value=3599,
+            value=int(st.session_state.timer_seconds),
+            step=1,
+            key="mw_timer_sec",
+            label_visibility="collapsed",
+            disabled=bool(st.session_state.timer_running),
+        )
+
+        # Apply new duration immediately when not running (treat as a reset)
+        new_duration = int(mins) * 60 + int(secs)
+        if (
+            (int(mins) != int(st.session_state.timer_minutes) or int(secs) != int(st.session_state.timer_seconds))
+            and not bool(st.session_state.timer_running)
+        ):
+            st.session_state.timer_minutes = int(mins)
+            st.session_state.timer_seconds = int(secs)
+            st.session_state.timer_duration_sec = max(1, int(new_duration))
+            st.session_state.timer_elapsed_before = 0.0
+            st.session_state.timer_start_ts = time.time()
+            st.session_state.timer_alarm = False
+            st.rerun()
+
+        label = "Pause" if bool(st.session_state.timer_running) else "Start"
+        if st.button(label, key="mw_timer_startpause", type="secondary", help="MW_TIMER_STARTPAUSE"):
+            if bool(st.session_state.timer_running):
+                # Pause
+                now = time.time()
+                st.session_state.timer_elapsed_before = float(st.session_state.timer_elapsed_before) + (
+                    now - float(st.session_state.timer_start_ts)
+                )
+                st.session_state.timer_running = False
+            else:
+                # Start / resume (unlock audio best-effort)
+                st.session_state.timer_audio_unlocked = True
+                # If finished, restart from full duration
+                if _timer_remaining_sec() == 0:
+                    st.session_state.timer_duration_sec = max(1, int(st.session_state.timer_minutes) * 60 + int(st.session_state.timer_seconds))
+                    st.session_state.timer_elapsed_before = 0.0
+                st.session_state.timer_start_ts = time.time()
+                st.session_state.timer_running = True
+                st.session_state.timer_alarm = False
+            st.rerun()
+
+        if st.button("Reset", key="mw_timer_reset", type="secondary", help="MW_TIMER_RESET"):
+            st.session_state.timer_running = False
+            st.session_state.timer_duration_sec = max(1, int(st.session_state.timer_minutes) * 60 + int(st.session_state.timer_seconds))
+            st.session_state.timer_elapsed_before = 0.0
+            st.session_state.timer_start_ts = time.time()
+            st.session_state.timer_alarm = False
+            st.rerun()
 
     # Best-effort buzzer at 0 (requires audio to be unlocked by a user gesture on many iOS devices)
     if bool(st.session_state.timer_audio_unlocked):
@@ -480,7 +617,7 @@ def _render_practice_mode():
     st.markdown("<div style='height: 1.6rem'></div>", unsafe_allow_html=True)
 
     # timer controls under spacer
-    _timer_controls_row("practice_timer")
+    # Timer controls are accessed by tapping the floating timer (no separate row here)
 
     # top controls row under spacer
     top = st.columns([1, 1, 1, 1, 8])
@@ -614,7 +751,7 @@ if not topics:
 st.markdown("<div style='height: 1.9rem'></div>", unsafe_allow_html=True)
 
 # timer controls under the spacer
-_timer_controls_row("main_timer")
+# Timer controls are accessed by tapping the floating timer (no separate row here)
 
 # Main-page font controls under the spacer
 _scale_controls_row("main_top")
