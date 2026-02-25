@@ -10,6 +10,7 @@ from question_bank import (
     generate_two_per_topic,
     regenerate_question,
     generate_questions_by_template,
+    get_template,
 )
 from pdf_export import build_pdf_bytes
 
@@ -604,6 +605,39 @@ button[title="MW_TIMER_TOGGLE"] { animation: none !important; box-shadow: none !
     if st.button(f"{mm:02d}:{ss:02d}", key="mw_timer_toggle", type="secondary", help="MW_TIMER_TOGGLE"):
         st.session_state.timer_panel_open = not bool(st.session_state.timer_panel_open)
         st.rerun()
+
+
+def _regen_pair(topic: str, level_id: str, max_diff: int) -> None:
+    """Regenerate BOTH questions for a topic so the pair stays matched (same type + same step/ratio)."""
+    grouped = st.session_state.generated
+    pair_params_map = st.session_state.get("pair_params_map") or {}
+
+    tmpl = get_template(topic, level_id, max_difficulty=int(max_diff))
+
+    new_params = None
+    if tmpl.pair_params_factory:
+        prev = pair_params_map.get(topic)
+        rngp = random.Random(random.randint(1, 10**9))
+        for _ in range(25):
+            cand = tmpl.pair_params_factory(rngp)
+            if cand != prev:
+                new_params = cand
+                break
+        if new_params is None:
+            new_params = tmpl.pair_params_factory(rngp)
+
+    pair_params_map[topic] = new_params
+
+    q1 = grouped[topic][0]
+    q2 = grouped[topic][1]
+    grouped[topic][0] = regenerate_question(topic=topic, template_id=q1.template_id, max_difficulty=max_diff, new_seed=random.randint(1, 10**9), fixed_params=new_params)
+    grouped[topic][1] = regenerate_question(topic=topic, template_id=q2.template_id, max_difficulty=max_diff, new_seed=random.randint(1, 10**9), fixed_params=new_params)
+
+    st.session_state.generated = grouped
+    st.session_state.pair_params_map = pair_params_map
+    st.session_state.pdf_cache = None
+    st.session_state.pdf_fp = None
+
 
     # Timer controls shown only when the panel is open
     if bool(st.session_state.timer_panel_open):
@@ -1218,17 +1252,20 @@ for topic in ordered_topics:
         # Controls at bottom: N A W D I
         ctrl = st.columns(5)
         if ctrl[0].button("N", key=f"n__{slot1}", help="New version", type="secondary"):
-            new_seed = random.randint(1, 10**9)
-            grouped[topic][0] = regenerate_question(
-                topic=topic, template_id=q1.template_id, max_difficulty=max_diff, new_seed=new_seed, fixed_params=pair_params_map.get(topic)
-            )
+            # Regenerate BOTH questions so the pair remains matched (same type + same step/ratio)
+            level_id = st.session_state.topics_levels.get(topic, q1.level_id)
+            _regen_pair(topic, level_id, int(max_diff))
+
+            # reset UI toggles for both sides
+            slot2 = _slot(topic, 1)
             st.session_state[ans1_key] = False
             st.session_state[work1_key] = False
             st.session_state[draw1_key] = False
             st.session_state[f"ink__{slot1}"] = "white"
-            st.session_state.generated = grouped
-            st.session_state.pdf_cache = None
-            st.session_state.pdf_fp = None
+            st.session_state[f"ans__{slot2}"] = False
+            st.session_state[f"work__{slot2}"] = False
+            st.session_state[f"draw__{slot2}"] = False
+            st.session_state[f"ink__{slot2}"] = "white"
             st.rerun()
 
         if ctrl[1].button("A", key=f"a__{slot1}", help="Answer", type="secondary"):
@@ -1288,17 +1325,20 @@ for topic in ordered_topics:
         if st.session_state.get(show2_key, False):
             ctrl = st.columns(6)
             if ctrl[0].button("N", key=f"n__{slot2}", help="New version", type="secondary"):
-                new_seed = random.randint(1, 10**9)
-                grouped[topic][1] = regenerate_question(
-                    topic=topic, template_id=q2.template_id, max_difficulty=max_diff, new_seed=new_seed, fixed_params=pair_params_map.get(topic)
-                )
+                # Regenerate BOTH questions so the pair remains matched (same type + same step/ratio)
+                level_id = st.session_state.topics_levels.get(topic, q2.level_id)
+                _regen_pair(topic, level_id, int(max_diff))
+
+                # reset UI toggles for both sides
+                slot1b = _slot(topic, 0)
+                st.session_state[f"ans__{slot1b}"] = False
+                st.session_state[f"work__{slot1b}"] = False
+                st.session_state[f"draw__{slot1b}"] = False
+                st.session_state[f"ink__{slot1b}"] = "white"
                 st.session_state[ans2_key] = False
                 st.session_state[work2_key] = False
                 st.session_state[draw2_key] = False
                 st.session_state[f"ink__{slot2}"] = "white"
-                st.session_state.generated = grouped
-                st.session_state.pdf_cache = None
-                st.session_state.pdf_fp = None
                 st.rerun()
 
             if ctrl[1].button("A", key=f"a__{slot2}", help="Answer", type="secondary"):

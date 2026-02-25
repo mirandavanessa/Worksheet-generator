@@ -125,36 +125,63 @@ def _gen_seq_sub(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]
 
 
 def _gen_seq_mul(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    r = int(params["r"]) if params and "r" in params else rng.choice([2, 3, 4, 5])
-    a1 = rng.choice([1, 2, 3, 4, 5, 6, 8, 9, 10, 12])
+    # Pair-locked ratio r, but starting value varies each regeneration.
+    r = int(params["r"]) if params and "r" in params else rng.choice([2, 3])
+
+    # Keep values easy (avoid very large terms).
+    # We show 5 terms and ask for the next 2, so control the 5th term.
+    def ok_start(a1: int) -> bool:
+        term5 = a1 * (r ** 4)
+        return term5 <= 200
+
+    starts = [1, 2, 3, 4, 5, 6, 8, 9, 10, 12]
+    a1 = rng.choice(starts)
+    tries = 0
+    while not ok_start(a1) and tries < 30:
+        a1 = rng.choice(starts)
+        tries += 1
+
     seq = [a1]
     for _ in range(4):
         seq.append(seq[-1] * r)
+
     nxt = [seq[-1] * r, seq[-1] * r * r]
     prompt = "Write the next two terms:"
     latex = _sequence_str(seq)
-    answer = f"{nxt[0]},\\, {nxt[1]}"
+    answer = f"{nxt[0]},\, {nxt[1]}"
     working = [
         ("text", f"Multiply by {r} each time."),
-        ("math", rf"{seq[-1]}\\times {r}={nxt[0]}\\quad {nxt[0]}\\times {r}={nxt[1]}"),
+        ("math", rf"{seq[-1]}\times {r}={nxt[0]}\quad {nxt[0]}\times {r}={nxt[1]}"),
     ]
     return prompt, latex, answer, working
 
 
 def _gen_seq_div(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    r = int(params["r"]) if params and "r" in params else rng.choice([2, 3, 4, 5])
-    k = rng.choice([1, 2, 3, 4])
+    # Pair-locked divisor r, but starting value varies each regeneration.
+    # We guarantee the next two terms remain integers (no truncation).
+    r = int(params["r"]) if params and "r" in params else rng.choice([2, 3])
+
+    # We build 5 terms by dividing 4 times, then ask for the next 2.
+    # Let term5 = k. To keep the next two terms integers, k must be a multiple of r^2.
+    if r == 2:
+        k_choices = [4, 8, 12, 16, 20]
+    else:  # r == 3
+        k_choices = [9, 18, 27]
+
+    k = rng.choice(k_choices)
     a1 = k * (r ** 4)
+
     seq = [a1]
     for _ in range(4):
         seq.append(seq[-1] // r)
+
     nxt = [seq[-1] // r, seq[-1] // (r * r)]
     prompt = "Write the next two terms:"
     latex = _sequence_str(seq)
-    answer = f"{nxt[0]},\\, {nxt[1]}"
+    answer = f"{nxt[0]},\, {nxt[1]}"
     working = [
         ("text", f"Divide by {r} each time."),
-        ("math", rf"{seq[-1]}\\div {r}={nxt[0]}\\quad {nxt[0]}\\div {r}={nxt[1]}"),
+        ("math", rf"{seq[-1]}\div {r}={nxt[0]}\quad {nxt[0]}\div {r}={nxt[1]}"),
     ]
     return prompt, latex, answer, working
 
@@ -698,7 +725,7 @@ TEMPLATES: List[Template] = [
         level_name="Add the same amount",
         difficulty=1,
         generator=_gen_seq_add,
-        pair_params_factory=lambda r: {"d": r.choice([2, 3, 4, 5, 6, 7, 8, 9, 10])},
+        pair_params_factory=lambda r: {"d": r.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12])},
     ),
     Template(
         template_id="seq_sub",
@@ -707,7 +734,7 @@ TEMPLATES: List[Template] = [
         level_name="Subtract the same amount",
         difficulty=2,
         generator=_gen_seq_sub,
-        pair_params_factory=lambda r: {"s": r.choice([2, 3, 4, 5, 6, 7, 8, 9, 10])},
+        pair_params_factory=lambda r: {"s": r.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12])},
     ),
     Template(
         template_id="seq_mul",
@@ -716,7 +743,7 @@ TEMPLATES: List[Template] = [
         level_name="Multiply by the same number",
         difficulty=3,
         generator=_gen_seq_mul,
-        pair_params_factory=lambda r: {"r": r.choice([2, 3, 4, 5])},
+        pair_params_factory=lambda r: {"r": r.choice([2, 3])},
     ),
     Template(
         template_id="seq_div",
@@ -725,7 +752,7 @@ TEMPLATES: List[Template] = [
         level_name="Divide by the same number",
         difficulty=4,
         generator=_gen_seq_div,
-        pair_params_factory=lambda r: {"r": r.choice([2, 3, 4, 5])},
+        pair_params_factory=lambda r: {"r": r.choice([2, 3])},
     ),
     Template(
         template_id="seq_fibo",
