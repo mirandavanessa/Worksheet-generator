@@ -38,23 +38,37 @@ st.markdown(
 
 /* Shrink SECONDARY buttons (used for per-question micro-controls) */
 button[kind="secondary"] {
-    padding: 0.00rem 0.16rem !important;
-    font-size: 0.55rem !important;
+    padding: 0.00rem 0.14rem !important;
+    font-size: 0.52rem !important;
     line-height: 1 !important;
-    height: 0.95rem !important;
-    min-height: 0.95rem !important;
-    min-width: 1.15rem !important;
+    height: 0.92rem !important;
+    min-height: 0.92rem !important;
+    min-width: 1.05rem !important;
 }
 
-/* Make PRIMARY buttons neutral (black) – used for instruction bars and any primary actions */
+/* PRIMARY buttons: use as a very subtle "instruction bar" (barely visible) */
 button[kind="primary"] {
-    background: #000000 !important;
-    color: #FFFFFF !important;
-    border: 1px solid rgba(255,255,255,0.18) !important;
+    background: rgba(0,0,0,0.00) !important;
+    color: rgba(255,255,255,0.00) !important; /* label is NBSP; keep invisible */
+    border: 1px solid rgba(255,255,255,0.10) !important;
     padding: 0.18rem 0.40rem !important;
     font-size: 0.80rem !important;
     height: 1.60rem !important;
     min-height: 1.60rem !important;
+}
+
+/* Keep the download button clearly visible */
+div[data-testid="stDownloadButton"] button {
+    background: rgba(0,0,0,0.92) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
+}
+
+/* Keep the sidebar primary action (Regenerate ALL) clearly visible */
+div[data-testid="stSidebar"] button[kind="primary"] {
+    background: rgba(0,0,0,0.92) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
 }
 
 /* Reduce excess spacing inside columns */
@@ -188,14 +202,14 @@ def _instruction_bar(slot: str):
         msg = "&nbsp;"
         color = "#FFFFFF"
     elif state == 1:
-        msg = "EMPTY HAND, EYES ON THE BOARD"
-        color = "#FFFFFF"
+        msg = "EMPTY HANDS! EYES ON THE BOARD!"
+        color = "#FF3B3B"  # red
     elif state == 2:
         msg = "COPY DOWN IN YOUR BOOKS IN PURPLE PEN"
-        color = "#B000FF"
+        color = "#B000FF"  # purple
     else:
         msg = "DO ON YOUR WHITEBOARDS AND HOVER WHEN READY"
-        color = "#FFFFFF"
+        color = "#2F81F7"  # blue
 
     st.markdown(
         f"<div class='inst-overlay' style='color:{color};'>{msg}</div>",
@@ -318,10 +332,6 @@ def _render_practice_mode():
         for target_col, i in [(colL, left_idx), (colR, right_idx)]:
             with target_col:
                 q = qs[i]
-
-                # Instruction bar for this question
-                _instruction_bar(f"prac__{i}")
-
                 st.markdown(f"**{i+1}. {q.prompt}**")
                 if q.latex.strip():
                     st.latex(q.latex)
@@ -523,7 +533,8 @@ for topic in ordered_topics:
         _instruction_bar(slot2)
 
         if not st.session_state.get(show2_key, False):
-            st.info("Second question hidden.")
+            # Leave blank (no "hidden" message)
+            st.markdown("&nbsp;", unsafe_allow_html=True)
         else:
             st.markdown(f"**{q2.prompt}**")
             if q2.latex.strip():
