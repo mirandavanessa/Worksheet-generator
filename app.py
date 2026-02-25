@@ -95,16 +95,15 @@ button[aria-label="Cycle instruction"] span {
     line-height: 1 !important;
 }
 
-/* Floating timer trigger + panel (fixed top-right). We target by unique title/aria-label strings. */
-div[data-testid="stButton"]:has(button[title="MW_TIMER_TOGGLE"]) {
+/* Floating timer trigger + panel (fixed top-right).
+   IMPORTANT: Do NOT rely on :has() selectors (Safari/iPad compatibility varies).
+   We position the button itself as fixed so it always floats.
+*/
+button[title="MW_TIMER_TOGGLE"] {
     position: fixed;
-    top: 5.25rem;   /* moved down to avoid Streamlit header */
+    top: 5.95rem;   /* moved down to avoid Streamlit header */
     right: 1.00rem;
     z-index: 10000;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-button[title="MW_TIMER_TOGGLE"] {
     background: rgba(0,0,0,0.92);
     color: #FFFFFF;
     border: 1px solid rgba(255,255,255,0.25);
@@ -118,38 +117,38 @@ button[title="MW_TIMER_TOGGLE"] {
     min-width: 0 !important;
 }
 
-/* Panel inputs */
-div[data-testid="stNumberInput"]:has(input[aria-label="MW_TIMER_MIN"]) {
+/* Panel inputs (position the INPUTS directly so we don't depend on wrapper selectors) */
+input[aria-label="MW_TIMER_MIN"] {
     position: fixed;
-    top: 12.75rem;
+    top: 13.45rem;
     right: 10.60rem;
     z-index: 10000;
     width: 6.20rem;
 }
-div[data-testid="stNumberInput"]:has(input[aria-label="MW_TIMER_SEC"]) {
+input[aria-label="MW_TIMER_SEC"] {
     position: fixed;
-    top: 12.75rem;
+    top: 13.45rem;
     right: 3.55rem;
     z-index: 10000;
     width: 6.20rem;
 }
 
-/* Panel buttons */
-div[data-testid="stButton"]:has(button[title="MW_TIMER_STARTPAUSE"]) {
+/* Panel buttons (position the BUTTONS directly) */
+button[title="MW_TIMER_STARTPAUSE"] {
     position: fixed;
-    top: 16.05rem;
+    top: 16.75rem;
     right: 10.60rem;
     z-index: 10000;
 }
-div[data-testid="stButton"]:has(button[title="MW_TIMER_RESET"]) {
+button[title="MW_TIMER_RESET"] {
     position: fixed;
-    top: 16.05rem;
+    top: 16.75rem;
     right: 3.55rem;
     z-index: 10000;
 }
 
 /* Compact styling for timer inputs/buttons */
-div[data-testid="stNumberInput"]:has(input[aria-label^="MW_TIMER_"]) input {
+input[aria-label^="MW_TIMER_"] {
     font-size: 1.15rem !important;
     height: 2.35rem !important;
 }
