@@ -29,12 +29,12 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-# ---------- CSS: minimal distraction controls + instruction bar + floating timer ----------
+# ---------- CSS: minimal distraction controls + instruction cycle + floating timer ----------
 st.markdown(
     """
 <style>
 /* Increase top padding so top controls are not hidden by Streamlit header */
-.block-container { padding-top: 2.4rem; }
+.block-container { padding-top: 3.2rem; }
 
 /* Shrink SECONDARY buttons (used for per-question micro-controls) */
 button[kind="secondary"] {
@@ -44,17 +44,6 @@ button[kind="secondary"] {
     height: 0.92rem !important;
     min-height: 0.92rem !important;
     min-width: 1.05rem !important;
-}
-
-/* PRIMARY buttons: use as a very subtle "instruction bar" (barely visible) */
-button[kind="primary"] {
-    background: rgba(0,0,0,0.00) !important;
-    color: rgba(255,255,255,0.00) !important; /* label is NBSP; keep invisible */
-    border: 1px solid rgba(255,255,255,0.10) !important;
-    padding: 0.18rem 0.40rem !important;
-    font-size: 0.80rem !important;
-    height: 1.60rem !important;
-    min-height: 1.60rem !important;
 }
 
 /* Keep the download button clearly visible */
@@ -74,24 +63,41 @@ div[data-testid="stSidebar"] button[kind="primary"] {
 /* Reduce excess spacing inside columns */
 div[data-testid="column"] > div { gap: 0.35rem; }
 
-/* Instruction overlay text (sits on top of a blank primary button) */
-.inst-overlay {
-    margin-top: -1.60rem;          /* pull overlay onto the button */
-    height: 1.60rem;
+/* Instruction line text (large) */
+.inst-line {
+    min-height: 2.0rem;
     display: flex;
     align-items: center;
-    justify-content: center;
-    pointer-events: none;          /* clicks go to the button underneath */
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: 0.03em;
-    font-size: 0.78rem;
-    margin-bottom: 0;
+    font-size: 1.56rem; /* ~2x previous */
+    margin: 0.10rem 0 0.10rem 0;
+}
+
+/* Make ONLY the instruction-cycle button a small black circle */
+button[title="Instruction cycle"],
+button[aria-label="Instruction cycle"],
+button[title="Cycle instruction"],
+button[aria-label="Cycle instruction"] {
+    border-radius: 999px !important;
+    background: rgba(0,0,0,0.92) !important;
+    border: 1px solid rgba(255,255,255,0.18) !important;
+    min-width: 0.92rem !important;
+    width: 0.92rem !important;
+    padding: 0 !important;
+}
+button[title="Instruction cycle"] span,
+button[aria-label="Instruction cycle"] span,
+button[title="Cycle instruction"] span,
+button[aria-label="Cycle instruction"] span {
+    font-size: 0.60rem !important;
+    line-height: 1 !important;
 }
 
 /* Floating timer (fixed top-right) */
 .floating-timer {
     position: fixed;
-    top: 0.65rem;
+    top: 3.20rem; /* below Streamlit header */
     right: 1.00rem;
     z-index: 10000;
     background: rgba(0,0,0,0.92);
@@ -179,27 +185,21 @@ def _scale_controls_row(key_prefix: str):
         st.rerun()
 
 
-# ---------------- Instruction line (tap to cycle) ----------------
-def _instruction_bar(slot: str):
-    """
-    Black instruction bar, tap to cycle:
-      blank -> EMPTY HAND, EYES ON THE BOARD
-            -> COPY DOWN IN YOUR BOOKS IN PURPLE PEN  (purple text)
-            -> DO ON YOUR WHITEBOARDS AND HOVER WHEN READY
-            -> blank
-    Implemented as a blank primary button + overlay text (pointer-events disabled).
-    """
+# ---------------- Instruction line (cycle button + large text) ----------------
+def _instruction_line(slot: str):
+    """Small black circle button cycles a large instruction message (or blank)."""
     state_key = f"inst_state__{slot}"
     _set_default(state_key, 0)
 
-    # Clickable area: blank label
-    if st.button("\u00A0", key=f"inst_btn__{slot}", type="primary", use_container_width=True):
-        st.session_state[state_key] = (int(st.session_state[state_key]) + 1) % 4
-        st.rerun()
+    cbtn, ctext = st.columns([1, 20], gap="small")
+    with cbtn:
+        if st.button("●", key=f"inst_btn__{slot}", help="Instruction cycle", type="secondary"):
+            st.session_state[state_key] = (int(st.session_state[state_key]) + 1) % 4
+            st.rerun()
 
     state = int(st.session_state[state_key])
     if state == 0:
-        msg = "&nbsp;"
+        msg = ""
         color = "#FFFFFF"
     elif state == 1:
         msg = "EMPTY HANDS! EYES ON THE BOARD!"
@@ -211,10 +211,12 @@ def _instruction_bar(slot: str):
         msg = "DO ON YOUR WHITEBOARDS AND HOVER WHEN READY"
         color = "#2F81F7"  # blue
 
-    st.markdown(
-        f"<div class='inst-overlay' style='color:{color};'>{msg}</div>",
-        unsafe_allow_html=True,
-    )
+    with ctext:
+        safe_msg = msg if msg else "&nbsp;"
+        st.markdown(
+            f"<div class='inst-line' style='color:{color};'>{safe_msg}</div>",
+            unsafe_allow_html=True,
+        )
 
 
 # ---------------- Canvas (per-question) ----------------
@@ -401,8 +403,8 @@ with st.sidebar:
 if "mode" not in st.session_state:
     st.session_state.mode = "main"
 
-# global ui scale
-_set_default("ui_scale", 1.00)
+# global ui scale (default to maximum so you can only decrease)
+_set_default("ui_scale", 1.70)
 _render_scale_css(float(st.session_state.ui_scale))
 
 # floating timer (all pages)
@@ -465,7 +467,7 @@ for topic in ordered_topics:
     with c1:
         q1 = grouped[topic][0]
 
-        _instruction_bar(slot1)
+        _instruction_line(slot1)
 
         st.markdown(f"**{q1.prompt}**")
         if q1.latex.strip():
@@ -529,8 +531,8 @@ for topic in ordered_topics:
     with c2:
         q2 = grouped[topic][1]
 
-        # Instruction bar exists even when Q2 is hidden (still clickable)
-        _instruction_bar(slot2)
+        # Instruction line exists even when Q2 is hidden (still clickable)
+        _instruction_line(slot2)
 
         if not st.session_state.get(show2_key, False):
             # Leave blank (no "hidden" message)
