@@ -999,7 +999,7 @@ with st.sidebar:
         options=available_topics(),
         default=[t for t in DEFAULT_TOPICS if t in available_topics()],
     )
-    max_diff = st.slider("Max difficulty", 1, 5, 3)
+    max_diff = st.slider("Max difficulty", 1, 5, 5)
 
     st.subheader("Levels")
     # One level selector per chosen topic
@@ -1116,7 +1116,74 @@ for topic in ordered_topics:
         continue
 
     lvl = level_name_map.get(topic, "")
-    st.markdown(f"#### {topic}" + (f" — {lvl}" if lvl else ""))
+    # Topic header + quick level adjust (− / +) on main page
+    safe_topic = "".join(ch if ch.isalnum() else "_" for ch in topic)
+    level_opts = available_levels(topic, max_difficulty=int(max_diff))
+    ids = [x[0] for x in level_opts]
+    names = {x[0]: x[1] for x in level_opts}
+
+    cur_level_id = st.session_state.topics_levels.get(topic, ids[0] if ids else "")
+    cur_level_name = names.get(cur_level_id, lvl) if ids else lvl
+
+    h1, h2, h3 = st.columns([8, 1, 1])
+    h1.markdown(f"#### {topic}" + (f" — {cur_level_name}" if cur_level_name else ""))
+
+    key_level = f"level__{safe_topic}"
+    if ids and len(ids) > 1:
+        if h2.button("−", key=f"lvlm__{safe_topic}", help="Previous level", type="secondary"):
+            idx = ids.index(cur_level_id) if cur_level_id in ids else 0
+            new_level_id = ids[max(0, idx - 1)]
+            st.session_state[key_level] = new_level_id
+            st.session_state.topics_levels[topic] = new_level_id
+
+            sub_grouped, sub_params, sub_lvl_map = generate_two_per_topic(
+                topics_levels={topic: new_level_id},
+                max_difficulty=int(max_diff),
+                seed=seed,
+            )
+            if sub_grouped.get(topic):
+                grouped[topic] = sub_grouped[topic]
+                pair_params_map[topic] = sub_params.get(topic)
+                level_name_map[topic] = sub_lvl_map.get(topic, "")
+                st.session_state.generated = grouped
+                st.session_state.pair_params_map = pair_params_map
+                st.session_state.level_name_map = level_name_map
+
+            new_fp = hashlib.sha1(
+                repr((seed, int(max_diff), tuple(sorted(st.session_state.topics_levels.items())))).encode()
+            ).hexdigest()
+            st.session_state.settings_fp = new_fp
+            st.session_state.pdf_cache = None
+            st.session_state.pdf_fp = None
+            st.rerun()
+
+        if h3.button("+", key=f"lvlp__{safe_topic}", help="Next level", type="secondary"):
+            idx = ids.index(cur_level_id) if cur_level_id in ids else 0
+            new_level_id = ids[min(len(ids) - 1, idx + 1)]
+            st.session_state[key_level] = new_level_id
+            st.session_state.topics_levels[topic] = new_level_id
+
+            sub_grouped, sub_params, sub_lvl_map = generate_two_per_topic(
+                topics_levels={topic: new_level_id},
+                max_difficulty=int(max_diff),
+                seed=seed,
+            )
+            if sub_grouped.get(topic):
+                grouped[topic] = sub_grouped[topic]
+                pair_params_map[topic] = sub_params.get(topic)
+                level_name_map[topic] = sub_lvl_map.get(topic, "")
+                st.session_state.generated = grouped
+                st.session_state.pair_params_map = pair_params_map
+                st.session_state.level_name_map = level_name_map
+
+            new_fp = hashlib.sha1(
+                repr((seed, int(max_diff), tuple(sorted(st.session_state.topics_levels.items())))).encode()
+            ).hexdigest()
+            st.session_state.settings_fp = new_fp
+            st.session_state.pdf_cache = None
+            st.session_state.pdf_fp = None
+            st.rerun()
+
 
     # Default: hide the second question until revealed
     show2_key = f"show2__{_slot(topic, 1)}"

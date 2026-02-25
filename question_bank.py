@@ -94,7 +94,7 @@ class Template:
 # --- Continuing sequences ---
 
 def _gen_seq_add(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    d = int(params["d"]) if params and "d" in params else rng.choice([1, 2, 3, 4, 5, 6, 8, 10])
+    d = int(params["d"]) if params and "d" in params else rng.choice([2, 3, 4, 5, 6, 7, 8, 9, 10])
     a1 = rng.randint(-20, 30)
     seq = [a1 + i * d for i in range(5)]
     nxt = [seq[-1] + d, seq[-1] + 2 * d]
@@ -109,7 +109,7 @@ def _gen_seq_add(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]
 
 
 def _gen_seq_sub(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    s = int(params["s"]) if params and "s" in params else rng.choice([1, 2, 3, 4, 5, 6, 8, 10])
+    s = int(params["s"]) if params and "s" in params else rng.choice([2, 3, 4, 5, 6, 7, 8, 9, 10])
     d = -s
     a1 = rng.randint(-10, 60)
     seq = [a1 + i * d for i in range(5)]
@@ -698,7 +698,7 @@ TEMPLATES: List[Template] = [
         level_name="Add the same amount",
         difficulty=1,
         generator=_gen_seq_add,
-        pair_params_factory=lambda r: {"d": r.choice([1, 2, 3, 4, 5, 6, 8, 10])},
+        pair_params_factory=lambda r: {"d": r.choice([2, 3, 4, 5, 6, 7, 8, 9, 10])},
     ),
     Template(
         template_id="seq_sub",
@@ -707,7 +707,7 @@ TEMPLATES: List[Template] = [
         level_name="Subtract the same amount",
         difficulty=2,
         generator=_gen_seq_sub,
-        pair_params_factory=lambda r: {"s": r.choice([1, 2, 3, 4, 5, 6, 8, 10])},
+        pair_params_factory=lambda r: {"s": r.choice([2, 3, 4, 5, 6, 7, 8, 9, 10])},
     ),
     Template(
         template_id="seq_mul",
