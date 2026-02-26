@@ -83,16 +83,25 @@ button[kind="secondary"] {
     height: 0.92rem !important;
     min-height: 0.92rem !important;
     min-width: 1.05rem !important;
-    background: rgba(85,85,85,0.92) !important;
-    color: #F2F2F2 !important;
-    border: 1px solid rgba(0,0,0,0.25) !important;
+    background: rgba(0,0,0,0.92) !important;
+    color: #555555 !important;
+    border: 1px solid rgba(85,85,85,0.30) !important;
 }
+
+button[kind="secondary"] * {
+    color: #555555 !important;
+}
+
 
 /* Keep the download button clearly visible */
 div[data-testid="stDownloadButton"] button {
     background: rgba(0,0,0,0.92) !important;
     color: #FFFFFF !important;
     border: 1px solid rgba(255,255,255,0.25) !important;
+}
+
+div[data-testid="stDownloadButton"] button * {
+    color: #FFFFFF !important;
 }
 
 /* Keep the sidebar primary action (Regenerate ALL) clearly visible */
@@ -122,8 +131,9 @@ button[aria-label="Instruction cycle"],
 button[title="Cycle instruction"],
 button[aria-label="Cycle instruction"] {
     border-radius: 999px !important;
-    background: rgba(85,85,85,0.92) !important;
-    border: 1px solid rgba(0,0,0,0.25) !important;
+    background: rgba(0,0,0,0.92) !important;
+    border: 1px solid rgba(85,85,85,0.30) !important;
+    color: #555555 !important;
     min-width: 0.92rem !important;
     width: 0.92rem !important;
     padding: 0 !important;
@@ -134,6 +144,7 @@ button[title="Cycle instruction"] span,
 button[aria-label="Cycle instruction"] span {
     font-size: 0.60rem !important;
     line-height: 1 !important;
+    color: #555555 !important;
 }
 
 /* Floating timer trigger + panel (fixed top-right).
@@ -156,6 +167,10 @@ button[title="MW_TIMER_TOGGLE"] {
     height: auto !important;
     min-height: 0 !important;
     min-width: 0 !important;
+}
+
+button[title="MW_TIMER_TOGGLE"] * {
+    color: #FFFFFF !important;
 }
 
 /* Panel inputs (position the INPUTS directly so we don't depend on wrapper selectors) */
@@ -197,6 +212,9 @@ button[title^="MW_TIMER_"]:not([title="MW_TIMER_TOGGLE"]) {
     background: rgba(0,0,0,0.92) !important;
     color: #FFFFFF !important;
     border: 1px solid rgba(255,255,255,0.25) !important;
+}
+button[title^="MW_TIMER_"] * {
+    color: #FFFFFF !important;
 }
 
 @keyframes mw_flash {
@@ -955,7 +973,7 @@ def _render_practice_mode():
                     st.rerun()
 
                 if st.session_state[ans_key]:
-                    cAns.latex(rf"\color{{green}}{{{qs[i].answer_latex}}}")
+                    cAns.latex(rf"\color{{#00ff00}}{{{qs[i].answer_latex}}}")
                 else:
                     cAns.markdown("&nbsp;", unsafe_allow_html=True)
 
