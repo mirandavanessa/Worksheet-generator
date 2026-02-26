@@ -272,7 +272,7 @@ def _inject_overlay_timer():
       left:50%;
       transform: translateX(-50%);
       width:2px;
-      background: rgba(0,0,0,0.55);
+      background: rgba(255,255,255,0.85);
       z-index: 99998;
       pointer-events:none;
     }
