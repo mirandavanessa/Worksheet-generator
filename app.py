@@ -67,6 +67,14 @@ st.markdown(
 /* Increase top padding so top controls are not hidden by Streamlit header */
 .block-container { padding-top: 3.8rem; }
 
+/* Topic title styling (smaller + dark grey) */
+.topic-title {
+    font-size: 0.78rem; /* ~40% smaller than default h4 */
+    color: #555555;
+    font-weight: 650;
+    margin: 0.0rem 0 0.25rem 0;
+}
+
 /* Shrink SECONDARY buttons (used for per-question micro-controls) */
 button[kind="secondary"] {
     padding: 0.00rem 0.14rem !important;
@@ -75,6 +83,9 @@ button[kind="secondary"] {
     height: 0.92rem !important;
     min-height: 0.92rem !important;
     min-width: 1.05rem !important;
+    background: rgba(85,85,85,0.92) !important;
+    color: #F2F2F2 !important;
+    border: 1px solid rgba(0,0,0,0.25) !important;
 }
 
 /* Keep the download button clearly visible */
@@ -111,8 +122,8 @@ button[aria-label="Instruction cycle"],
 button[title="Cycle instruction"],
 button[aria-label="Cycle instruction"] {
     border-radius: 999px !important;
-    background: rgba(0,0,0,0.92) !important;
-    border: 1px solid rgba(255,255,255,0.18) !important;
+    background: rgba(85,85,85,0.92) !important;
+    border: 1px solid rgba(0,0,0,0.25) !important;
     min-width: 0.92rem !important;
     width: 0.92rem !important;
     padding: 0 !important;
@@ -892,7 +903,7 @@ def _render_practice_mode():
     # shared font scaling buttons
     _scale_controls_row("practice_top")
 
-    st.markdown(f"#### {topic}")
+    st.markdown(f"<div class='topic-title'>{topic}</div>", unsafe_allow_html=True)
 
     if st.session_state.get("practice_questions") is None:
         qs = generate_questions_by_template(
@@ -1087,7 +1098,10 @@ for topic in ordered_topics:
     cur_level_name = names.get(cur_level_id, lvl) if ids else lvl
 
     h1, h2, h3 = st.columns([8, 1, 1])
-    h1.markdown(f"#### {topic}" + (f" — {cur_level_name}" if cur_level_name else ""))
+    h1.markdown(
+        f"<div class='topic-title'>{topic}{(' — ' + cur_level_name) if cur_level_name else ''}</div>",
+        unsafe_allow_html=True,
+    )
 
     key_level = f"level__{safe_topic}"
     if ids and len(ids) > 1:
