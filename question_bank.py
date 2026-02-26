@@ -47,7 +47,7 @@ def _lin_expr(a: int, b: int, var: str = "x") -> str:
 
 
 def _sequence_str(seq: List[int]) -> str:
-    # Use thin-spaces (\\,) between terms to avoid accidental line-breaks (\\)
+    # Use thin-spaces (\,) between terms to avoid accidental line-breaks (\\)
     # and to keep output compatible with both KaTeX (Streamlit) and matplotlib mathtext.
     return ",\\,".join(str(x) for x in seq) + r",\\,\\ldots"
 
@@ -136,6 +136,129 @@ def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str)
     # Notch depth (d)
     mx, my = mid(p3, p4)
     draw.text((mx + 10, my - 10), d, fill=(0, 0, 0), font=font)
+
+    return _img_bytes(img)
+
+
+# --- Area diagram helpers (PIL) ---
+
+def _rectangle_diagram(L: str, W: str) -> bytes:
+    """Axis-aligned rectangle labelled with length (bottom) and width (right)."""
+    img = Image.new("RGB", (420, 220), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    font = _default_font(18)
+
+    x0, y0 = 70, 180
+    x1, y1 = 350, 60
+    draw.rectangle([x0, y1, x1, y0], outline=(0, 0, 0), width=4)
+
+    # labels
+    draw.text(((x0 + x1) / 2 - 10, y0 + 8), L, fill=(0, 0, 0), font=font)
+    draw.text((x1 + 10, (y0 + y1) / 2 - 10), W, fill=(0, 0, 0), font=font)
+
+    return _img_bytes(img)
+
+
+def _triangle_diagram(base: str, height: str) -> bytes:
+    """Triangle with a dashed height dropped to the base (perpendicular)."""
+    img = Image.new("RGB", (420, 240), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    font = _default_font(18)
+
+    A = (80, 190)
+    B = (340, 190)
+    C = (260, 70)
+
+    draw.line([A, B, C, A], fill=(0, 0, 0), width=4)
+
+    # height from C to base AB
+    foot = (C[0], A[1])
+    draw.line([C, foot], fill=(0, 0, 0), width=2)
+
+    # right angle marker at foot
+    ra = 10
+    draw.line([(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)], fill=(0, 0, 0), width=2)
+
+    # labels
+    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), base, fill=(0, 0, 0), font=font)
+    draw.text((foot[0] + 10, (C[1] + foot[1]) / 2 - 10), height, fill=(0, 0, 0), font=font)
+
+    return _img_bytes(img)
+
+
+def _parallelogram_diagram(base: str, height: str) -> bytes:
+    img = Image.new("RGB", (460, 240), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    font = _default_font(18)
+
+    A = (110, 190)
+    B = (360, 190)
+    D = (70, 80)
+    C = (320, 80)
+
+    draw.line([A, B, C, D, A], fill=(0, 0, 0), width=4)
+
+    # height from D to AB
+    foot = (D[0], A[1])
+    draw.line([D, foot], fill=(0, 0, 0), width=2)
+
+    # right angle marker
+    ra = 10
+    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=(0, 0, 0), width=2)
+
+    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), base, fill=(0, 0, 0), font=font)
+    draw.text((foot[0] - 25, (D[1] + foot[1]) / 2 - 10), height, fill=(0, 0, 0), font=font)
+
+    return _img_bytes(img)
+
+
+def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
+    """Trapezium with parallel sides a (top) and b (bottom) and perpendicular height h."""
+    img = Image.new("RGB", (480, 260), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    font = _default_font(18)
+
+    A = (120, 200)
+    B = (380, 200)
+    D = (160, 80)
+    C = (320, 80)
+
+    draw.line([A, B, C, D, A], fill=(0, 0, 0), width=4)
+
+    # height from D to AB
+    foot = (D[0], A[1])
+    draw.line([D, foot], fill=(0, 0, 0), width=2)
+
+    ra = 10
+    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=(0, 0, 0), width=2)
+
+    draw.text(((D[0] + C[0]) / 2 - 10, D[1] - 28), a, fill=(0, 0, 0), font=font)
+    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), b, fill=(0, 0, 0), font=font)
+    draw.text((foot[0] - 25, (D[1] + foot[1]) / 2 - 10), h, fill=(0, 0, 0), font=font)
+
+    return _img_bytes(img)
+
+
+def _kite_diagram(d1: str, d2: str) -> bytes:
+    """Kite/rhombus style with diagonals labelled."""
+    img = Image.new("RGB", (420, 260), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    font = _default_font(18)
+
+    top = (210, 60)
+    right = (330, 130)
+    bottom = (210, 210)
+    left = (90, 130)
+
+    draw.line([top, right, bottom, left, top], fill=(0, 0, 0), width=4)
+
+    # diagonals
+    draw.line([top, bottom], fill=(0, 0, 0), width=2)
+    draw.line([left, right], fill=(0, 0, 0), width=2)
+
+    # labels near diagonals
+    draw.text((225, 125), d1, fill=(0, 0, 0), font=font)  # vertical
+    draw.text((170, 145), d2, fill=(0, 0, 0), font=font)  # horizontal
 
     return _img_bytes(img)
 
@@ -815,7 +938,7 @@ def _gen_rect_perim_all(rng: random.Random, seed: int, params: Optional[Dict[str
     answer = rf"{P}\ \mathrm{{cm}}"
     working = [
         ("text", "Add all the outside edges around the shape."),
-        ("math", rf"P = 2	imes {W} + 2	imes {H} + 2	imes {d}"),
+        ("math", rf"P = 2\\times {W} + 2\\times {H} + 2\\times {d}"),
         ("math", rf"P = {P}\ \mathrm{{cm}}"),
     ]
     return prompt, latex, answer, working, diagram
@@ -842,7 +965,7 @@ def _gen_rect_perim_missing(rng: random.Random, seed: int, params: Optional[Dict
         ("text", "First find the missing top length."),
         ("math", rf"{L2} = {W} - {L1} - {w}"),
         ("text", "Now add all the outside edges around the shape."),
-        ("math", rf"P = 2	imes {W} + 2	imes {H} + 2	imes {d}"),
+        ("math", rf"P = 2\\times {W} + 2\\times {H} + 2\\times {d}"),
         ("math", rf"P = {P}\ \mathrm{{cm}}"),
     ]
     return prompt, latex, answer, working, diagram
@@ -867,13 +990,174 @@ def _gen_rect_perim_find_x(rng: random.Random, seed: int, params: Optional[Dict[
     answer = rf"x = {x}\ \mathrm{{cm}}"
     working = [
         ("text", "Write an expression for the perimeter."),
-        ("math", rf"{P} = 2	imes {W} + 2	imes {H} + 2x"),
+        ("math", rf"{P} = 2\\times {W} + 2\\times {H} + 2x"),
         ("math", rf"2x = {P - (2*W + 2*H)}"),
-        ("math", rf"x = rac{{{P - (2*W + 2*H)}}}{{2}} = {x}"),
+        ("math", rf"x = \\frac{{{P - (2*W + 2*H)}}}{{2}} = {x}"),
     ]
     return prompt, latex, answer, working, diagram
 
 
+
+
+# --- Area of shapes (with diagrams) ---
+
+def _gen_area_rectangle(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    L = rng.choice([6, 7, 8, 9, 10, 12, 14, 15, 16, 18])
+    W = rng.choice([4, 5, 6, 7, 8, 9, 10, 12])
+    A = L * W
+    diagram = _rectangle_diagram(str(L), str(W))
+
+    prompt = "Find the area of the rectangle (in cm^2)."
+    latex = ""
+    answer = rf"{A}\ \mathrm{{cm}}^2"
+    working = [
+        ("text", "Area of a rectangle = length × width."),
+        ("math", rf"A = {L}\times {W}"),
+        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_area_triangle(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    b = rng.choice([6, 8, 10, 12, 14, 16, 18])
+    h = rng.choice([4, 5, 6, 7, 8, 9, 10])
+    A = b * h / 2
+    # keep integer area
+    if A != int(A):
+        # force even b
+        b = rng.choice([6, 8, 10, 12, 14, 16, 18])
+        h = rng.choice([4, 6, 8, 10])
+        A = b * h / 2
+    A = int(A)
+
+    diagram = _triangle_diagram(str(b), str(h))
+
+    prompt = "Find the area of the triangle (in cm^2)."
+    latex = ""
+    answer = rf"{A}\ \mathrm{{cm}}^2"
+    working = [
+        ("text", "Area of a triangle = 1/2 × base × height."),
+        ("math", rf"A = \frac{{1}}{{2}}\times {b}\times {h}"),
+        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_area_parallelogram(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    b = rng.choice([6, 7, 8, 9, 10, 12, 14, 15, 16])
+    h = rng.choice([4, 5, 6, 7, 8, 9, 10])
+    A = b * h
+    diagram = _parallelogram_diagram(str(b), str(h))
+
+    prompt = "Find the area of the parallelogram (in cm^2)."
+    latex = ""
+    answer = rf"{A}\ \mathrm{{cm}}^2"
+    working = [
+        ("text", "Area of a parallelogram = base × perpendicular height."),
+        ("math", rf"A = {b}\times {h}"),
+        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_area_trapezium(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    a = rng.choice([6, 8, 10, 12, 14, 16])
+    b = rng.choice([10, 12, 14, 16, 18, 20])
+    if b <= a:
+        a, b = b, a
+    h = rng.choice([4, 5, 6, 7, 8, 9, 10])
+    A = (a + b) * h / 2
+    if A != int(A):
+        h = rng.choice([4, 6, 8, 10])
+        A = (a + b) * h / 2
+    A = int(A)
+
+    diagram = _trapezium_diagram(str(a), str(b), str(h))
+
+    prompt = "Find the area of the trapezium (in cm^2)."
+    latex = ""
+    answer = rf"{A}\ \mathrm{{cm}}^2"
+    working = [
+        ("text", "Area of a trapezium = 1/2 × (sum of parallel sides) × height."),
+        ("math", rf"A = \frac{{1}}{{2}}\times ({a}+{b})\times {h}"),
+        ("math", rf"A = \frac{{1}}{{2}}\times {a+b}\times {h}"),
+        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_area_kite(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    d1 = rng.choice([8, 10, 12, 14, 16, 18])
+    d2 = rng.choice([6, 8, 10, 12, 14, 16])
+    A = d1 * d2 / 2
+    if A != int(A):
+        d1 = rng.choice([8, 10, 12, 14, 16])
+        d2 = rng.choice([6, 8, 10, 12, 14])
+        A = d1 * d2 / 2
+    A = int(A)
+
+    diagram = _kite_diagram(str(d1), str(d2))
+
+    prompt = "Find the area of the kite (in cm^2)."
+    latex = ""
+    answer = rf"{A}\ \mathrm{{cm}}^2"
+    working = [
+        ("text", "Area of a kite (or rhombus) = 1/2 × d_1 × d_2."),
+        ("math", rf"A = \frac{{1}}{{2}}\times {d1}\times {d2}"),
+        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_area_compound_rectilinear(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    # Use the same notch shape as perimeter; compute area as big rectangle minus cut-out.
+    W = rng.choice([18, 20, 22, 24, 26, 28, 30])
+    H = rng.choice([12, 14, 16, 18, 20])
+    w = rng.choice([6, 8, 10])
+    d = rng.choice([3, 4, 5, 6])
+    L1 = rng.choice([5, 6, 7, 8, 9])
+    L2 = W - L1 - w
+    if L2 <= 3:
+        L1 = 6
+        L2 = W - L1 - w
+
+    big = W * H
+    cut = w * d
+    A = big - cut
+
+    diagram = _rectilinear_notch_diagram(str(W), str(H), str(L1), str(w), str(L2), str(d))
+
+    prompt = "Find the area of the compound rectilinear shape (in cm^2)."
+    latex = ""
+    answer = rf"{A}\ \mathrm{{cm}}^2"
+    working = [
+        ("text", "Find the area of the large rectangle."),
+        ("math", rf"A_\mathrm{{big}} = {W}\times {H} = {big}"),
+        ("text", "Find the area of the cut-out rectangle."),
+        ("math", rf"A_\mathrm{{cut}} = {w}\times {d} = {cut}"),
+        ("text", "Subtract to get the area of the shape."),
+        ("math", rf"A = {big} - {cut} = {A}\ \mathrm{{cm}}^2"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_area_find_x(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    # Rectangle with one side x, other side known, and area given.
+    W = rng.choice([4, 5, 6, 7, 8, 9, 10, 12])
+    x = rng.choice([6, 7, 8, 9, 10, 12, 14, 15, 16])
+    A = W * x
+
+    diagram = _rectangle_diagram('x', str(W))
+
+    prompt = f"The area of the rectangle is {A} cm^2. Find x."
+    latex = ""
+    answer = rf"x = {x}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Area = length × width."),
+        ("math", rf"{A} = x\times {W}"),
+        ("math", rf"x = \frac{{{A}}}{{{W}}} = {x}"),
+    ]
+    return prompt, latex, answer, working, diagram
 # --- Polygon angles ---
 
 def _gen_poly_regular_interior(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
@@ -885,8 +1169,8 @@ def _gen_poly_regular_interior(rng: random.Random, seed: int, params: Optional[D
     answer = rf"{interior_str}^\circ"
     working = [
         ("text", "Interior angle of a regular n-gon:"),
-        ("math", r"rac{(n-2)	imes 180}{n}"),
-        ("math", rf"= rac{{({n}-2)	imes 180}}{{{n}}} = {interior_str}^\circ"),
+        ("math", r"\\frac{(n-2)\\times 180}{n}"),
+        ("math", rf"= \\frac{{({n}-2)\\times 180}}{{{n}}} = {interior_str}^\circ"),
     ]
     return prompt, latex, answer, working
 
@@ -900,7 +1184,7 @@ def _gen_poly_regular_exterior(rng: random.Random, seed: int, params: Optional[D
     answer = rf"{exterior_str}^\circ"
     working = [
         ("text", "Exterior angles sum to 360°."),
-        ("math", rf"rac{{360}}{{{n}}} = {exterior_str}^\circ"),
+        ("math", rf"\\frac{{360}}{{{n}}} = {exterior_str}^\circ"),
     ]
     return prompt, latex, answer, working
 
@@ -914,7 +1198,7 @@ def _gen_poly_find_n_from_exterior(rng: random.Random, seed: int, params: Option
     answer = f"{n}"
     working = [
         ("text", "Exterior angles sum to 360°."),
-        ("math", rf"n = rac{{360}}{{{ext_str}}} = {n}"),
+        ("math", rf"n = \\frac{{360}}{{{ext_str}}} = {n}"),
     ]
     return prompt, latex, answer, working
 
@@ -927,8 +1211,8 @@ def _gen_poly_sum_interior(rng: random.Random, seed: int, params: Optional[Dict[
     answer = rf"{s}^\circ"
     working = [
         ("text", "Sum of interior angles:"),
-        ("math", r"(n-2)	imes 180"),
-        ("math", rf"= ({n}-2)	imes 180 = {s}^\circ"),
+        ("math", r"(n-2)\\times 180"),
+        ("math", rf"= ({n}-2)\\times 180 = {s}^\circ"),
     ]
     return prompt, latex, answer, working
 
@@ -981,7 +1265,7 @@ def _gen_poly_tessellation_find_n(rng: random.Random, seed: int, params: Optiona
         ("math", rf"{target_interior} = 360 - {known_sum}"),
         ("text", "Exterior = 180 - interior."),
         ("math", rf"\mathrm{{Exterior}} = 180 - {target_interior} = {ext}^\circ"),
-        ("math", rf"n = rac{{360}}{{{ext}}} = {n}"),
+        ("math", rf"n = \\frac{{360}}{{{ext}}} = {n}"),
     ]
     return prompt, latex, answer, working
 
@@ -1005,11 +1289,11 @@ def _gen_poly_algebra_interior(rng: random.Random, seed: int, params: Optional[D
     answer = rf"x = {x}"
     working = [
         ("text", "First find the interior angle."),
-        ("math", rf"rac{{({n}-2)	imes 180}}{{{n}}} = {interior}^\circ"),
+        ("math", rf"\\frac{{({n}-2)\\times 180}}{{{n}}} = {interior}^\circ"),
         ("text", "Now form and solve an equation."),
         ("math", rf"{a}x {'+' if b>=0 else '-'} {abs(b)} = {interior}"),
         ("math", rf"{a}x = {interior - b}"),
-        ("math", rf"x = rac{{{interior - b}}}{{{a}}} = {x}"),
+        ("math", rf"x = \\frac{{{interior - b}}}{{{a}}} = {x}"),
     ]
     return prompt, latex, answer, working
 
@@ -1030,11 +1314,11 @@ def _gen_poly_algebra_exterior(rng: random.Random, seed: int, params: Optional[D
     answer = rf"x = {x}"
     working = [
         ("text", "First find the exterior angle."),
-        ("math", rf"rac{{360}}{{{n}}} = {ext}^\circ"),
+        ("math", rf"\\frac{{360}}{{{n}}} = {ext}^\circ"),
         ("text", "Now form and solve an equation."),
         ("math", rf"{a}x {'+' if b>=0 else '-'} {abs(b)} = {ext}"),
         ("math", rf"{a}x = {ext - b}"),
-        ("math", rf"x = rac{{{ext - b}}}{{{a}}} = {x}"),
+        ("math", rf"x = \\frac{{{ext - b}}}{{{a}}} = {x}"),
     ]
     return prompt, latex, answer, working
 
@@ -1344,6 +1628,65 @@ TEMPLATES: List[Template] = [
         lambda r, s, p: _gen_complete_square_a_not1(r, s, {"frac_inside": True}),
     ),
 
+
+
+    # Area of shapes
+    Template(
+        template_id="area_rect",
+        topic="Area of shapes",
+        level_id="rect",
+        level_name="Rectangle",
+        difficulty=1,
+        generator=_gen_area_rectangle,
+    ),
+    Template(
+        template_id="area_tri",
+        topic="Area of shapes",
+        level_id="tri",
+        level_name="Triangle",
+        difficulty=2,
+        generator=_gen_area_triangle,
+    ),
+    Template(
+        template_id="area_para",
+        topic="Area of shapes",
+        level_id="para",
+        level_name="Parallelogram",
+        difficulty=2,
+        generator=_gen_area_parallelogram,
+    ),
+    Template(
+        template_id="area_trap",
+        topic="Area of shapes",
+        level_id="trap",
+        level_name="Trapezium",
+        difficulty=3,
+        generator=_gen_area_trapezium,
+    ),
+    Template(
+        template_id="area_kite",
+        topic="Area of shapes",
+        level_id="kite",
+        level_name="Kite / rhombus (diagonals)",
+        difficulty=3,
+        generator=_gen_area_kite,
+    ),
+    Template(
+        template_id="area_compound",
+        topic="Area of shapes",
+        level_id="compound",
+        level_name="Compound rectilinear",
+        difficulty=4,
+        generator=_gen_area_compound_rectilinear,
+    ),
+    Template(
+        template_id="area_find_x",
+        topic="Area of shapes",
+        level_id="find_x",
+        level_name="Given area, find x",
+        difficulty=5,
+        generator=_gen_area_find_x,
+    ),
     # Perimeter of rectilinear shapes
     Template(
         template_id="perim_all",
@@ -1448,8 +1791,29 @@ TEMPLATES: List[Template] = [
 # -----------------------------
 
 
+TOPIC_ORDER: List[str] = [
+    "Continuing sequences",
+    "Finding the nth term",
+    "Using the nth term",
+    "Solving 1 step equations",
+    "Solving 2 step equations",
+    "Finding percentages using non-calculator methods",
+    "Finding percentages using calculator methods",
+    "Increasing and decreasing by percentages using non-calculator methods",
+    "Increasing and decreasing by percentages using calculator methods",
+    "Completing the square",
+    "Perimeter of rectilinear shapes",
+    "Area of shapes",
+    "Interior and exterior angles of polygons",
+    "Reasoning with polygon angles",
+    "Algebraic geometry and angle equations",
+]
+
 def available_topics() -> List[str]:
-    return sorted({t.topic for t in TEMPLATES})
+    topics = {t.topic for t in TEMPLATES}
+    order = {name: i for i, name in enumerate(TOPIC_ORDER)}
+    return sorted(topics, key=lambda t: (order.get(t, 10**9), t))
+
 
 
 def available_levels(topic: str, max_difficulty: int = 5) -> List[Tuple[str, str]]:
@@ -1583,314 +1947,10 @@ def generate_questions_by_template(
     return out
 
 
-
-# ============================================================
-# Area of shapes (with diagrams) — added v35
-# ============================================================
-
-def _area_rectangle_diagram(L: str, W: str) -> bytes:
-    img = Image.new("RGB", (520, 240), (255, 255, 255))
-    draw = ImageDraw.Draw(img)
-    font = _default_font(18)
-
-    x0, y0 = 120, 200
-    x1, y1 = 420, 60
-    draw.rectangle([x0, y1, x1, y0], outline=(0,0,0), width=4)
-
-    # Length (bottom)
-    draw.text(((x0+x1)/2 - 12, y0 + 8), L, fill=(0,0,0), font=font)
-    # Width (right)
-    draw.text((x1 + 10, (y0+y1)/2 - 10), W, fill=(0,0,0), font=font)
-    return _img_bytes(img)
-
-
-def _area_triangle_diagram(B: str, H: str) -> bytes:
-    img = Image.new("RGB", (520, 240), (255, 255, 255))
-    draw = ImageDraw.Draw(img)
-    font = _default_font(18)
-
-    # Right triangle for clarity
-    A = (140, 200)
-    C = (420, 200)
-    Bp = (140, 70)
-    draw.line([A, C, Bp, A], fill=(0,0,0), width=4)
-
-    # Height line already part of triangle (A->Bp)
-    # Right angle marker at A
-    draw.line([(140,200),(160,200)], fill=(0,0,0), width=3)
-    draw.line([(140,200),(140,180)], fill=(0,0,0), width=3)
-
-    # Labels
-    draw.text(((A[0]+C[0])/2 - 12, 208), B, fill=(0,0,0), font=font)  # base
-    draw.text((110, (A[1]+Bp[1])/2 - 10), H, fill=(0,0,0), font=font)  # height
-
-    return _img_bytes(img)
-
-
-def _area_parallelogram_diagram(B: str, H: str) -> bytes:
-    img = Image.new("RGB", (520, 240), (255, 255, 255))
-    draw = ImageDraw.Draw(img)
-    font = _default_font(18)
-
-    p0 = (160, 200)
-    p1 = (400, 200)
-    p2 = (360, 80)
-    p3 = (120, 80)
-    draw.line([p0,p1,p2,p3,p0], fill=(0,0,0), width=4)
-
-    # Height (perpendicular) from p3 to base
-    draw.line([(120,80),(120,200)], fill=(0,0,0), width=2)
-    # Right angle marker at base
-    draw.line([(120,200),(140,200)], fill=(0,0,0), width=2)
-    draw.line([(120,200),(120,180)], fill=(0,0,0), width=2)
-
-    draw.text(((p0[0]+p1[0])/2 - 12, 208), B, fill=(0,0,0), font=font)
-    draw.text((90, 130), H, fill=(0,0,0), font=font)
-    return _img_bytes(img)
-
-
-def _area_trapezium_diagram(A: str, B: str, H: str) -> bytes:
-    img = Image.new("RGB", (520, 240), (255, 255, 255))
-    draw = ImageDraw.Draw(img)
-    font = _default_font(18)
-
-    # Bottom base longer than top base
-    p0 = (140, 200)
-    p1 = (420, 200)
-    p2 = (360, 90)
-    p3 = (200, 90)
-    draw.line([p0,p1,p2,p3,p0], fill=(0,0,0), width=4)
-
-    # Height line from p3 to base
-    draw.line([(200,90),(200,200)], fill=(0,0,0), width=2)
-    draw.line([(200,200),(220,200)], fill=(0,0,0), width=2)
-    draw.line([(200,200),(200,180)], fill=(0,0,0), width=2)
-
-    draw.text(((p0[0]+p1[0])/2 - 12, 208), A, fill=(0,0,0), font=font) # bottom
-    draw.text(((p3[0]+p2[0])/2 - 12, 62), B, fill=(0,0,0), font=font)  # top
-    draw.text((170, 135), H, fill=(0,0,0), font=font)                  # height
-    return _img_bytes(img)
-
-
-def _area_rhombus_diagram(D1: str, D2: str) -> bytes:
-    img = Image.new("RGB", (520, 240), (255, 255, 255))
-    draw = ImageDraw.Draw(img)
-    font = _default_font(18)
-
-    top = (260, 60)
-    right = (400, 120)
-    bottom = (260, 200)
-    left = (120, 120)
-    draw.line([top,right,bottom,left,top], fill=(0,0,0), width=4)
-
-    # diagonals
-    draw.line([left,right], fill=(0,0,0), width=2)
-    draw.line([top,bottom], fill=(0,0,0), width=2)
-
-    draw.text((245, 208), D2, fill=(0,0,0), font=font)  # vertical diagonal label near bottom
-    draw.text((410, 110), D1, fill=(0,0,0), font=font)  # horizontal diagonal label near right
-    return _img_bytes(img)
-
-
-def _area_compound_rectilinear_diagram(W: str, H: str, cut_w: str, cut_h: str) -> bytes:
-    """L-shape: outer rectangle W x H, with top-right cutout cut_w x cut_h."""
-    img = Image.new("RGB", (520, 240), (255, 255, 255))
-    draw = ImageDraw.Draw(img)
-    font = _default_font(18)
-
-    x0, y0 = 120, 200
-    x1, y1 = 420, 60
-
-    # cutout in top-right
-    cw = 110
-    ch = 70
-    cx0, cy0 = x1 - cw, y1
-    cx1, cy1 = x1, y1 + ch
-
-    pts = [(x0,y0),(x1,y0),(x1,cy1),(cx0,cy1),(cx0,y1),(x0,y1),(x0,y0)]
-    draw.line(pts, fill=(0,0,0), width=4)
-
-    # labels (outer W,H)
-    draw.text(((x0+x1)/2 - 12, y0 + 8), W, fill=(0,0,0), font=font)
-    draw.text((x1 + 10, (y0+y1)/2 - 10), H, fill=(0,0,0), font=font)
-
-    # cutout dims (as given)
-    draw.text((cx0 + 20, y1 - 28), cut_w, fill=(0,0,0), font=font)
-    draw.text((x1 + 10, y1 + 20), cut_h, fill=(0,0,0), font=font)
-
-    return _img_bytes(img)
-
-
-# --- Generators ---
-
-def _gen_area_rectangle(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    L = rng.choice([6,7,8,9,10,12,14,15,16,18,20])
-    W = rng.choice([4,5,6,7,8,9,10,12])
-    A = L * W
-    diagram = _area_rectangle_diagram(str(L), str(W))
-    working = [
-        ("text", "Area of a rectangle = length × width."),
-        ("math", rf"A = {L}\times {W}"),
-        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
-    ]
-    return "Find the area of the rectangle (in cm²).", "", rf"{A}\ \mathrm{{cm}}^2", working, diagram
-
-
-def _gen_area_triangle(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    B = rng.choice([6,8,10,12,14,16,18])
-    H = rng.choice([5,6,7,8,9,10,12])
-    A = (B * H) / 2
-    # Keep integer area half the time by ensuring B even (it is) so A integer if H integer
-    A_int = int(A)
-    diagram = _area_triangle_diagram(str(B), str(H))
-    working = [
-        ("text", "Area of a triangle = ½ × base × height."),
-        ("math", rf"A = \frac{{1}}{{2}}\times {B}\times {H}"),
-        ("math", rf"A = {A_int}\ \mathrm{{cm}}^2"),
-    ]
-    return "Find the area of the triangle (in cm²).", "", rf"{A_int}\ \mathrm{{cm}}^2", working, diagram
-
-
-def _gen_area_parallelogram(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    B = rng.choice([6,7,8,9,10,12,14,15,16,18])
-    H = rng.choice([4,5,6,7,8,9,10,12])
-    A = B * H
-    diagram = _area_parallelogram_diagram(str(B), str(H))
-    working = [
-        ("text", "Area of a parallelogram = base × perpendicular height."),
-        ("math", rf"A = {B}\times {H}"),
-        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
-    ]
-    return "Find the area of the parallelogram (in cm²).", "", rf"{A}\ \mathrm{{cm}}^2", working, diagram
-
-
-def _gen_area_trapezium(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    a = rng.choice([8,10,12,14,16,18,20])
-    b = rng.choice([4,6,8,10,12,14])
-    h = rng.choice([4,5,6,7,8,9,10])
-    # Ensure (a+b) even so area integer
-    if (a + b) % 2 == 1:
-        b += 1
-    A = (a + b) * h // 2
-    diagram = _area_trapezium_diagram(str(a), str(b), str(h))
-    working = [
-        ("text", "Area of a trapezium = ½ × (sum of parallel sides) × height."),
-        ("math", rf"A = \frac{{1}}{{2}}\times ({a}+{b})\times {h}"),
-        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
-    ]
-    return "Find the area of the trapezium (in cm²).", "", rf"{A}\ \mathrm{{cm}}^2", working, diagram
-
-
-def _gen_area_rhombus(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    d1 = rng.choice([6,8,10,12,14,16,18,20])
-    d2 = rng.choice([5,6,7,8,9,10,12,14])
-    # Make product even (d1 is even) so area integer
-    A = d1 * d2 // 2
-    diagram = _area_rhombus_diagram(str(d1), str(d2))
-    working = [
-        ("text", "Area of a kite/rhombus = ½ × diagonal₁ × diagonal₂."),
-        ("math", rf"A = \frac{{1}}{{2}}\times {d1}\times {d2}"),
-        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
-    ]
-    return "Find the area of the kite/rhombus (in cm²).", "", rf"{A}\ \mathrm{{cm}}^2", working, diagram
-
-
-def _gen_area_compound_rectilinear(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    W = rng.choice([18,20,22,24,26,28,30])
-    H = rng.choice([12,14,16,18,20])
-    cut_w = rng.choice([6,8,10,12])
-    cut_h = rng.choice([5,6,7,8,9])
-    # keep cutout smaller
-    cut_w = min(cut_w, W - 8)
-    cut_h = min(cut_h, H - 6)
-    A = W*H - cut_w*cut_h
-    diagram = _area_compound_rectilinear_diagram(str(W), str(H), str(cut_w), str(cut_h))
-    working = [
-        ("text", "Split into: area of big rectangle minus area of cut-out."),
-        ("math", rf"A = {W}\times {H} - {cut_w}\times {cut_h}"),
-        ("math", rf"A = {A}\ \mathrm{{cm}}^2"),
-    ]
-    return "Find the area of the compound rectilinear shape (in cm²).", "", rf"{A}\ \mathrm{{cm}}^2", working, diagram
-
-
-def _gen_area_find_x(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    # Rectangle: area given, find x (width)
-    L = rng.choice([6,7,8,9,10,12,14,15,16,18])
-    x = rng.choice([4,5,6,7,8,9,10,12])
-    A = L * x
-    diagram = _area_rectangle_diagram(str(L), "x")
-    working = [
-        ("text", "Area of a rectangle = length × width."),
-        ("math", rf"{A} = {L}\times x"),
-        ("math", rf"x = \frac{{{A}}}{{{L}}} = {x}"),
-    ]
-    return f"The area of the rectangle is {A} cm². Find x.", "", rf"x = {x}\ \mathrm{{cm}}", working, diagram
-
-
-# Extend existing templates with area topic
-TEMPLATES.extend([
-    Template(
-        template_id="area_rect",
-        topic="Area of shapes",
-        level_id="rect",
-        level_name="Rectangle",
-        difficulty=1,
-        generator=_gen_area_rectangle,
-        pair_params_factory=None,
-    ),
-    Template(
-        template_id="area_tri",
-        topic="Area of shapes",
-        level_id="tri",
-        level_name="Triangle",
-        difficulty=2,
-        generator=_gen_area_triangle,
-        pair_params_factory=None,
-    ),
-    Template(
-        template_id="area_para",
-        topic="Area of shapes",
-        level_id="para",
-        level_name="Parallelogram",
-        difficulty=2,
-        generator=_gen_area_parallelogram,
-        pair_params_factory=None,
-    ),
-    Template(
-        template_id="area_trap",
-        topic="Area of shapes",
-        level_id="trap",
-        level_name="Trapezium",
-        difficulty=3,
-        generator=_gen_area_trapezium,
-        pair_params_factory=None,
-    ),
-    Template(
-        template_id="area_rhom",
-        topic="Area of shapes",
-        level_id="rhom",
-        level_name="Kite/Rhombus (diagonals)",
-        difficulty=3,
-        generator=_gen_area_rhombus,
-        pair_params_factory=None,
-    ),
-    Template(
-        template_id="area_comp",
-        topic="Area of shapes",
-        level_id="comp",
-        level_name="Compound rectilinear",
-        difficulty=4,
-        generator=_gen_area_compound_rectilinear,
-        pair_params_factory=None,
-    ),
-    Template(
-        template_id="area_x",
-        topic="Area of shapes",
-        level_id="x",
-        level_name="Given area, find x",
-        difficulty=5,
-        generator=_gen_area_find_x,
-        pair_params_factory=None,
-    ),
-])
-
+# --- Module diagnostics (prints to Streamlit logs) ---
+QB_BUILD = "v36-qbank-topics-area-perimeter-polygons"
+try:
+    print(f"QB_BUILD={QB_BUILD}")
+    print("QB_TOPICS=" + " | ".join(available_topics()))
+except Exception as _e:
+    print(f"QB_BUILD={QB_BUILD} (topics unavailable: {_e})")
