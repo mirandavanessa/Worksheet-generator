@@ -256,13 +256,25 @@ def _inject_overlay_timer():
   style.textContent = `
     #mw-floating-timer{
       position:fixed;
-      top:7.15rem;          /* moved down to clear Streamlit top bar on iPad */
-      right:1.00rem;
+      top:6.55rem;          /* slightly higher; clears Streamlit top bar */
+      left:50%;
+      transform: translateX(-50%);
       z-index:999999;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       user-select:none;
       -webkit-user-select:none;
       -webkit-touch-callout:none;
+    }
+    #mw-centerline{
+      position:fixed;
+      top:0;
+      bottom:0;
+      left:50%;
+      transform: translateX(-50%);
+      width:2px;
+      background: rgba(0,0,0,0.55);
+      z-index: 99998;
+      pointer-events:none;
     }
     #mw-timer-display{
       background: rgba(0,0,0,0.92);
@@ -274,6 +286,7 @@ def _inject_overlay_timer():
       line-height: 1;
       letter-spacing: 0.03em;
       cursor: pointer;
+      text-align: center;
       box-shadow: 0 6px 18px rgba(0,0,0,0.28);
     }
     #mw-timer-panel{
@@ -336,6 +349,13 @@ def _inject_overlay_timer():
     }
   `;
   doc.head.appendChild(style);
+
+  // Fixed centre divider line (full viewport height)
+  if (!doc.getElementById("mw-centerline")) {
+    const line = doc.createElement("div");
+    line.id = "mw-centerline";
+    doc.body.appendChild(line);
+  }
 
   const root = doc.createElement("div");
   root.id = "mw-floating-timer";
