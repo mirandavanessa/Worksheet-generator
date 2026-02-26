@@ -53,11 +53,14 @@ def _draw_math(c: canvas.Canvas, latex: str, x: float, y_top: float, max_w: floa
     return h
 
 
-def _draw_png(c: canvas.Canvas, png_bytes: bytes, x: float, y_top: float, max_w: float, max_h: float, assumed_dpi: float = 300.0) -> float:
-    """Draw a PNG image scaled to fit within max_w/max_h (points). Returns height used."""
+
+
+def _draw_png(c: canvas.Canvas, png_bytes: bytes, x: float, y_top: float, max_w: float, max_h: float) -> float:
+    """Draw a PNG (bytes) scaled to fit within max_w x max_h. Returns height used."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
-    w_pt = (img.width / assumed_dpi) * 72.0
-    h_pt = (img.height / assumed_dpi) * 72.0
+    dpi = 300.0
+    w_pt = (img.width / dpi) * 72.0
+    h_pt = (img.height / dpi) * 72.0
 
     scale = min(max_w / w_pt, max_h / h_pt)
     w = w_pt * scale
@@ -130,15 +133,21 @@ def build_pdf_bytes(title: str, grouped: Dict[str, List[GeneratedQuestion]], see
             used += _draw_wrapped_text(c, q.prompt, x0, y_content, col_w, "Helvetica", 10, leading=11)
             # latex line (optional)
             y_math_top = y_content - used - 0.15 * cm
-            if getattr(q, "diagram_png", None):
-                h = _draw_png(c, q.diagram_png, x0, y_math_top, max_w=col_w, max_h=2.85*cm)
-                used2 = (0.15 * cm + h)
-            elif q.latex.strip():
+            if q.latex.strip():
                 h = _draw_math(c, q.latex, x0, y_math_top, max_w=col_w, target_h=0.72*cm)
                 used2 = (0.15 * cm + h)
             else:
                 used2 = 0.0
             used_total = used + used2
+
+            # diagram (optional)
+            used_diag = 0.0
+            if getattr(q, 'diagram_png', None):
+                y_img_top = y_content - used_total - 0.10 * cm
+                # Fit diagram comfortably inside the row
+                used_diag = 0.10 * cm + _draw_png(c, q.diagram_png, x0, y_img_top, max_w=col_w, max_h=2.2*cm)
+
+            used_total = used_total + used_diag
 
             if show_answers:
                 y_ans = y_content - used_total - 0.15 * cm

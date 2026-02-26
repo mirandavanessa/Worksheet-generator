@@ -218,7 +218,6 @@ DEFAULT_TOPICS = [
     "Increasing and decreasing by percentages using non-calculator methods",
     "Increasing and decreasing by percentages using calculator methods",
     "Completing the square",
-    "Perimeter of rectilinear shapes",
 ]
 
 
@@ -897,10 +896,10 @@ def _render_practice_mode():
             with target_col:
                 q = qs[i]
                 st.markdown(f"**{i+1}. {q.prompt}**")
-                if getattr(q, "diagram_png", None):
-                    st.image(q.diagram_png, use_container_width=True)
                 if q.latex.strip():
                     st.latex(q.latex)
+                if getattr(q, "diagram_png", None):
+                    st.image(q.diagram_png, use_column_width=True)
 
                 ans_key = f"prac_ans__{i}"
                 _set_default(ans_key, False)
@@ -1111,10 +1110,10 @@ for topic in ordered_topics:
         _instruction_line(slot1)
 
         st.markdown(f"**{q1.prompt}**")
-        if getattr(q1, "diagram_png", None):
-            st.image(q1.diagram_png, use_container_width=True)
         if q1.latex.strip():
             st.latex(q1.latex)
+        if getattr(q1, 'diagram_png', None):
+            st.image(q1.diagram_png, use_column_width=True)
 
         if st.session_state[ans1_key]:
             st.markdown("**Answer:**")
@@ -1179,10 +1178,10 @@ for topic in ordered_topics:
             st.markdown("&nbsp;", unsafe_allow_html=True)
         else:
             st.markdown(f"**{q2.prompt}**")
-            if getattr(q2, "diagram_png", None):
-                st.image(q2.diagram_png, use_container_width=True)
             if q2.latex.strip():
                 st.latex(q2.latex)
+            if getattr(q2, 'diagram_png', None):
+                st.image(q2.diagram_png, use_column_width=True)
 
             if st.session_state[ans2_key]:
                 st.markdown("**Answer:**")

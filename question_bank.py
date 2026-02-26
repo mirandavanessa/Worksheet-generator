@@ -2,14 +2,9 @@ from __future__ import annotations
 
 import random
 import io
-
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from PIL import Image
-
 from dataclasses import dataclass
 from fractions import Fraction
+from PIL import Image, ImageDraw, ImageFont
 from typing import Callable, Dict, List, Tuple, Optional, Any
 
 # -----------------------------
@@ -69,6 +64,81 @@ def _sanitize_math(s: str) -> str:
     )
 
 
+# -----------------------------
+# Diagram helpers (PIL)
+# -----------------------------
+
+def _default_font(size: int = 18):
+    try:
+        return ImageFont.truetype("DejaVuSans.ttf", size=size)
+    except Exception:
+        return ImageFont.load_default()
+
+
+def _img_bytes(img: Image.Image) -> bytes:
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str) -> bytes:
+    """Simple rectilinear notch shape with labels.
+
+    Points define an outer rectangle with a notch cut from the top edge.
+    Labels are strings (e.g. '24', 'x', '?').
+    """
+    img = Image.new("RGB", (520, 240), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    font = _default_font(18)
+
+    x0, y0 = 60, 200
+    x1, y1 = 460, 40
+
+    notch_left = 220
+    notch_w = 90
+    notch_d = 60
+
+    p0 = (x0, y0)
+    p1 = (x1, y0)
+    p2 = (x1, y1)
+    p3 = (notch_left + notch_w, y1)
+    p4 = (notch_left + notch_w, y1 + notch_d)
+    p5 = (notch_left, y1 + notch_d)
+    p6 = (notch_left, y1)
+    p7 = (x0, y1)
+
+    pts = [p0, p1, p2, p3, p4, p5, p6, p7, p0]
+    draw.line(pts, fill=(0, 0, 0), width=4)
+
+    def mid(a, b):
+        return ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+
+    # Bottom (W)
+    mx, my = mid(p0, p1)
+    draw.text((mx - 12, my + 8), W, fill=(0, 0, 0), font=font)
+
+    # Right side (H)
+    mx, my = mid(p1, p2)
+    draw.text((mx + 10, my - 10), H, fill=(0, 0, 0), font=font)
+
+    # Top-left segment (L1)
+    mx, my = mid(p7, p6)
+    draw.text((mx - 12, my - 28), L1, fill=(0, 0, 0), font=font)
+
+    # Notch bottom segment (w)
+    mx, my = mid(p5, p4)
+    draw.text((mx - 8, my + 10), w, fill=(0, 0, 0), font=font)
+
+    # Top-right segment (L2)
+    mx, my = mid(p3, p2)
+    draw.text((mx - 8, my - 28), L2, fill=(0, 0, 0), font=font)
+
+    # Notch depth (d)
+    mx, my = mid(p3, p4)
+    draw.text((mx + 10, my - 10), d, fill=(0, 0, 0), font=font)
+
+    return _img_bytes(img)
+
 @dataclass(frozen=True)
 class GeneratedQuestion:
     qid: str
@@ -79,10 +149,10 @@ class GeneratedQuestion:
     prompt: str
     latex: str
     answer_latex: str
-    diagram_png: Optional[bytes]
     working: List[WorkingStep]
     template_id: str
     seed: int
+    diagram_png: Optional[bytes] = None
 
 
 @dataclass(frozen=True)
@@ -724,232 +794,249 @@ def _gen_complete_square_a_not1(rng: random.Random, seed: int, params: Optional[
 # Templates / Levels
 # -----------------------------
 
+# --- Perimeter of rectilinear shapes (with diagrams) ---
 
-# --- Perimeter of rectilinear shapes (diagrams) ---
-
-def _poly_edges(points: List[Tuple[float, float]]) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
-    return list(zip(points, points[1:] + [points[0]]))
-
-
-def _render_rectilinear_png(
-    points: List[Tuple[float, float]],
-    edge_labels: Dict[str, str],
-    edge_ids: List[str],
-    dpi: int = 300,
-) -> bytes:
-    """Render a simple rectilinear polygon diagram with labelled edges."""
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
-    w = max(xs) - min(xs)
-    h = max(ys) - min(ys)
-
-    # Size scaled to keep labels readable
-    fig_w = max(2.8, min(4.2, 0.22 * w + 2.4))
-    fig_h = max(2.2, min(3.6, 0.22 * h + 1.9))
-
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-
-    # Draw outline
-    px = xs + [xs[0]]
-    py = ys + [ys[0]]
-    ax.plot(px, py, color="black", linewidth=2.0)
-
-    # Place labels outside edges
-    edges = _poly_edges(points)
-    for eid, (p1, p2) in zip(edge_ids, edges):
-        lab = edge_labels.get(eid, "")
-        if not lab:
-            continue
-        x1, y1 = p1
-        x2, y2 = p2
-        mx, my = (x1 + x2) / 2.0, (y1 + y2) / 2.0
-        dx, dy = (x2 - x1), (y2 - y1)
-
-        # Outward normal for CCW polygon: rotate clockwise
-        nx, ny = (dy, -dx)
-        norm = (nx**2 + ny**2) ** 0.5
-        if norm == 0:
-            continue
-        nx, ny = nx / norm, ny / norm
-
-        # Offset proportional to overall size
-        off = 0.35
-        ax.text(
-            mx + nx * off,
-            my + ny * off,
-            lab,
-            ha="center",
-            va="center",
-            fontsize=12,
-            fontweight="bold",
-            color="black",
-        )
-
-    pad = 0.9
-    ax.set_xlim(min(xs) - pad, max(xs) + pad)
-    ax.set_ylim(min(ys) - pad, max(ys) + pad)
-    ax.set_aspect("equal")
-    ax.axis("off")
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight", pad_inches=0.08)
-    plt.close(fig)
-    buf.seek(0)
-    return buf.read()
-
-
-def _gen_perim_rect(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    L = rng.randint(6, 18)
-    W = rng.randint(4, 14)
-
-    points = [(0, 0), (L, 0), (L, W), (0, W)]
-    edge_ids = ["bottom", "right", "top", "left"]
-    edge_labels = {
-        "bottom": f"{L} cm",
-        "top": f"{L} cm",
-        "left": f"{W} cm",
-        "right": f"{W} cm",
-    }
-    diagram = _render_rectilinear_png(points, edge_labels, edge_ids)
-
-    P = 2 * (L + W)
-    prompt = "Find the perimeter of the shape. Give your answer in cm:"
-    latex = ""  # diagram carries the information
-    answer = rf"{P}\,\mathrm{{cm}}"
-    working: List[WorkingStep] = [
-        ("text", "Add the lengths of the outside edges."),
-        ("math", rf"P = 2({L}+{W}) = {P}"),
-    ]
-    return prompt, latex, answer, working, diagram
-
-
-def _gen_perim_notch_all(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    # Outer rectangle W x H with a notch of depth d on the right side (not at a corner)
-    W = rng.randint(10, 20)
-    H = rng.randint(8, 16)
-    d = rng.randint(2, 6)
-
-    y1 = rng.randint(2, H - 4)
-    y2 = rng.randint(y1 + 2, H - 2)
-    notch_h = y2 - y1
-
-    points = [(0, 0), (W, 0), (W, y1), (W - d, y1), (W - d, y2), (W, y2), (W, H), (0, H)]
-    edge_ids = ["bottom", "right_lower", "notch_in", "notch_vert", "notch_out", "right_upper", "top", "left"]
-
-    edge_labels = {
-        "bottom": f"{W} cm",
-        "top": f"{W} cm",
-        "left": f"{H} cm",
-        "right_lower": f"{y1} cm",
-        "notch_vert": f"{notch_h} cm",
-        "right_upper": f"{H - y2} cm",
-        "notch_in": f"{d} cm",
-        "notch_out": f"{d} cm",
-    }
-
-    diagram = _render_rectilinear_png(points, edge_labels, edge_ids)
+def _gen_rect_perim_all(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    W = rng.choice([18, 20, 22, 24, 26, 28, 30])
+    H = rng.choice([10, 12, 14, 16, 18])
+    w = rng.choice([6, 8, 10])
+    d = rng.choice([3, 4, 5, 6])
+    L1 = rng.choice([5, 6, 7, 8, 9, 10])
+    L2 = W - L1 - w
+    if L2 <= 3:
+        L1 = 6
+        L2 = W - L1 - w
 
     P = 2 * W + 2 * H + 2 * d
+    diagram = _rectilinear_notch_diagram(str(W), str(H), str(L1), str(w), str(L2), str(d))
 
-    prompt = "Find the perimeter of the shape. Give your answer in cm:"
+    prompt = "Find the perimeter of the shape (in cm)."
     latex = ""
-    answer = rf"{P}\,\mathrm{{cm}}"
-    working: List[WorkingStep] = [
-        ("text", "Add all the outside lengths."),
-        ("math", rf"P = {W} + {y1} + {d} + {notch_h} + {d} + {H - y2} + {W} + {H} = {P}"),
+    answer = rf"{P}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Add all the outside edges around the shape."),
+        ("math", rf"P = 2	imes {W} + 2	imes {H} + 2	imes {d}"),
+        ("math", rf"P = {P}\ \mathrm{{cm}}"),
     ]
     return prompt, latex, answer, working, diagram
 
 
-def _gen_perim_notch_missing(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    W = rng.randint(10, 20)
-    H = rng.randint(8, 16)
-    d = rng.randint(2, 6)
-
-    y1 = rng.randint(2, H - 5)
-    y2 = rng.randint(y1 + 2, H - 2)
-    notch_h = y2 - y1
-
-    # Make the upper segment missing
-    upper = H - y2
-
-    points = [(0, 0), (W, 0), (W, y1), (W - d, y1), (W - d, y2), (W, y2), (W, H), (0, H)]
-    edge_ids = ["bottom", "right_lower", "notch_in", "notch_vert", "notch_out", "right_upper", "top", "left"]
-
-    edge_labels = {
-        "bottom": f"{W} cm",
-        "top": f"{W} cm",
-        "left": f"{H} cm",
-        "right_lower": f"{y1} cm",
-        "notch_vert": f"{notch_h} cm",
-        "right_upper": "?",
-        "notch_in": f"{d} cm",
-        "notch_out": f"{d} cm",
-    }
-
-    diagram = _render_rectilinear_png(points, edge_labels, edge_ids)
+def _gen_rect_perim_missing(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    W = rng.choice([20, 22, 24, 26, 28, 30])
+    H = rng.choice([12, 14, 16, 18])
+    w = rng.choice([6, 8, 10])
+    d = rng.choice([3, 4, 5, 6])
+    L1 = rng.choice([6, 7, 8, 9, 10])
+    L2 = W - L1 - w
+    if L2 <= 3:
+        L1 = 7
+        L2 = W - L1 - w
 
     P = 2 * W + 2 * H + 2 * d
+    diagram = _rectilinear_notch_diagram(str(W), str(H), str(L1), str(w), "?", str(d))
 
-    prompt = "Find the perimeter of the shape. Some lengths are missing; work them out first:"
+    prompt = "Find the perimeter of the shape (in cm)."
     latex = ""
-    answer = rf"{P}\,\mathrm{{cm}}"
-
-    working: List[WorkingStep] = [
-        ("text", "First work out the missing side on the right."),
-        ("math", rf"? = {H} - {y1} - {notch_h} = {upper}"),
-        ("text", "Now add all the outside lengths."),
-        ("math", rf"P = {W} + {y1} + {d} + {notch_h} + {d} + {upper} + {W} + {H} = {P}"),
+    answer = rf"{P}\ \mathrm{{cm}}"
+    working = [
+        ("text", "First find the missing top length."),
+        ("math", rf"{L2} = {W} - {L1} - {w}"),
+        ("text", "Now add all the outside edges around the shape."),
+        ("math", rf"P = 2	imes {W} + 2	imes {H} + 2	imes {d}"),
+        ("math", rf"P = {P}\ \mathrm{{cm}}"),
     ]
-
     return prompt, latex, answer, working, diagram
 
 
-def _gen_perim_notch_givenP_findx(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    W = rng.randint(10, 20)
-    H = rng.randint(8, 16)
+def _gen_rect_perim_find_x(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    W = rng.choice([20, 22, 24, 26, 28, 30])
+    H = rng.choice([12, 14, 16, 18])
+    w = rng.choice([6, 8, 10])
+    L1 = rng.choice([6, 7, 8, 9, 10])
+    L2 = W - L1 - w
+    if L2 <= 3:
+        L1 = 7
+        L2 = W - L1 - w
 
-    # unknown depth x appears twice
-    x = rng.randint(2, 6)
-
-    y1 = rng.randint(2, H - 5)
-    y2 = rng.randint(y1 + 2, H - 2)
-    notch_h = y2 - y1
-    upper = H - y2
-
+    x = rng.choice([3, 4, 5, 6])
     P = 2 * W + 2 * H + 2 * x
+    diagram = _rectilinear_notch_diagram(str(W), str(H), str(L1), str(w), str(L2), "x")
 
-    points = [(0, 0), (W, 0), (W, y1), (W - x, y1), (W - x, y2), (W, y2), (W, H), (0, H)]
-    edge_ids = ["bottom", "right_lower", "notch_in", "notch_vert", "notch_out", "right_upper", "top", "left"]
-
-    edge_labels = {
-        "bottom": f"{W} cm",
-        "top": f"{W} cm",
-        "left": f"{H} cm",
-        "right_lower": f"{y1} cm",
-        "notch_vert": f"{notch_h} cm",
-        "right_upper": f"{upper} cm",
-        "notch_in": "x cm",
-        "notch_out": "x cm",
-    }
-
-    diagram = _render_rectilinear_png(points, edge_labels, edge_ids)
-
-    prompt = rf"The perimeter of the shape is {P} cm. Find x:"
+    prompt = f"The perimeter of the shape is {P} cm. Find x."
     latex = ""
-    answer = rf"x = {x}\,\mathrm{{cm}}"
-
-    working: List[WorkingStep] = [
-        ("text", "Write an equation for the perimeter."),
-        ("math", rf"{P} = 2\times {W} + 2\times {H} + 2x"),
-        ("math", rf"{P} = {2*W} + {2*H} + 2x"),
-        ("math", rf"2x = {P} - {2*W} - {2*H} = {2*x}"),
-        ("math", rf"x = {x}"),
+    answer = rf"x = {x}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Write an expression for the perimeter."),
+        ("math", rf"{P} = 2	imes {W} + 2	imes {H} + 2x"),
+        ("math", rf"2x = {P - (2*W + 2*H)}"),
+        ("math", rf"x = rac{{{P - (2*W + 2*H)}}}{{2}} = {x}"),
     ]
-
     return prompt, latex, answer, working, diagram
+
+
+# --- Polygon angles ---
+
+def _gen_poly_regular_interior(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    n = rng.choice([3, 4, 5, 6, 8, 9, 10, 12, 15, 18, 20])
+    interior = (n - 2) * 180 / n
+    interior_str = str(int(round(interior)))
+    prompt = f"A regular polygon has {n} sides. Find each interior angle."
+    latex = ""
+    answer = rf"{interior_str}^\circ"
+    working = [
+        ("text", "Interior angle of a regular n-gon:"),
+        ("math", r"rac{(n-2)	imes 180}{n}"),
+        ("math", rf"= rac{{({n}-2)	imes 180}}{{{n}}} = {interior_str}^\circ"),
+    ]
+    return prompt, latex, answer, working
+
+
+def _gen_poly_regular_exterior(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    n = rng.choice([3, 4, 5, 6, 8, 9, 10, 12, 15, 18, 20])
+    exterior = 360 / n
+    exterior_str = str(int(round(exterior)))
+    prompt = f"A regular polygon has {n} sides. Find each exterior angle."
+    latex = ""
+    answer = rf"{exterior_str}^\circ"
+    working = [
+        ("text", "Exterior angles sum to 360°."),
+        ("math", rf"rac{{360}}{{{n}}} = {exterior_str}^\circ"),
+    ]
+    return prompt, latex, answer, working
+
+
+def _gen_poly_find_n_from_exterior(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    n = rng.choice([3, 4, 5, 6, 8, 9, 10, 12, 15, 18, 20])
+    ext = 360 / n
+    ext_str = str(int(round(ext)))
+    prompt = f"A regular polygon has an exterior angle of {ext_str}°. Find the number of sides."
+    latex = ""
+    answer = f"{n}"
+    working = [
+        ("text", "Exterior angles sum to 360°."),
+        ("math", rf"n = rac{{360}}{{{ext_str}}} = {n}"),
+    ]
+    return prompt, latex, answer, working
+
+
+def _gen_poly_sum_interior(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    n = rng.choice([3, 4, 5, 6, 7, 8, 9, 10, 12])
+    s = (n - 2) * 180
+    prompt = f"Find the sum of the interior angles of a {n}-gon."
+    latex = ""
+    answer = rf"{s}^\circ"
+    working = [
+        ("text", "Sum of interior angles:"),
+        ("math", r"(n-2)	imes 180"),
+        ("math", rf"= ({n}-2)	imes 180 = {s}^\circ"),
+    ]
+    return prompt, latex, answer, working
+
+
+def _gen_poly_missing_irregular(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    n = rng.choice([5, 6, 7])
+    total = (n - 2) * 180
+    known = []
+    remaining = total
+    for _ in range(n - 1):
+        a = rng.choice([80, 90, 100, 110, 120, 130, 140, 150])
+        if remaining - a < 60:
+            a = 90
+        known.append(a)
+        remaining -= a
+    missing = remaining
+    prompt = f"A {n}-gon has interior angles {', '.join(str(x) for x in known)} and x. Find x."
+    latex = ""
+    answer = rf"{missing}^\circ"
+    working = [
+        ("text", f"Sum of interior angles = {total}°."),
+        ("math", rf"x = {total} - ({' + '.join(str(x) for x in known)})"),
+        ("math", rf"x = {missing}^\circ"),
+    ]
+    return prompt, latex, answer, working
+
+
+# --- Reasoning with polygon angles ---
+
+def _gen_poly_tessellation_find_n(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    scenario = rng.choice(["tri+sq+sq", "tri+tri+sq", "hex+sq", "sq+sq+sq"])
+    if scenario == "tri+sq+sq":
+        known_sum = 60 + 90 + 90
+    elif scenario == "tri+tri+sq":
+        known_sum = 60 + 60 + 90
+    elif scenario == "hex+sq":
+        known_sum = 120 + 90
+    else:
+        known_sum = 90 + 90 + 90
+
+    target_interior = 360 - known_sum
+    ext = 180 - target_interior
+    n = int(round(360 / ext))
+
+    prompt = "Angles around a point add to 360°. Find the number of sides of the missing regular polygon."
+    latex = ""
+    answer = f"{n}"
+    working = [
+        ("text", "Angles around a point add to 360°."),
+        ("math", rf"{target_interior} = 360 - {known_sum}"),
+        ("text", "Exterior = 180 - interior."),
+        ("math", rf"\mathrm{{Exterior}} = 180 - {target_interior} = {ext}^\circ"),
+        ("math", rf"n = rac{{360}}{{{ext}}} = {n}"),
+    ]
+    return prompt, latex, answer, working
+
+
+# --- Algebraic geometry and angle equations ---
+
+def _gen_poly_algebra_interior(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    n = rng.choice([5, 6, 8, 9, 10, 12])
+    interior = int(round((n - 2) * 180 / n))
+    x = rng.randint(2, 10)
+    a = rng.choice([2, 3, 4])
+    b = interior - a * x
+    # ensure b reasonable
+    if b < -20 or b > 80:
+        a = 3
+        x = rng.randint(2, 8)
+        b = interior - a * x
+
+    prompt = f"A regular {n}-gon has interior angle ({a}x {'+' if b>=0 else '-'} {abs(b)})°. Find x."
+    latex = ""
+    answer = rf"x = {x}"
+    working = [
+        ("text", "First find the interior angle."),
+        ("math", rf"rac{{({n}-2)	imes 180}}{{{n}}} = {interior}^\circ"),
+        ("text", "Now form and solve an equation."),
+        ("math", rf"{a}x {'+' if b>=0 else '-'} {abs(b)} = {interior}"),
+        ("math", rf"{a}x = {interior - b}"),
+        ("math", rf"x = rac{{{interior - b}}}{{{a}}} = {x}"),
+    ]
+    return prompt, latex, answer, working
+
+
+def _gen_poly_algebra_exterior(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    n = rng.choice([5, 6, 8, 9, 10, 12, 15])
+    ext = int(round(360 / n))
+    x = rng.randint(2, 10)
+    a = rng.choice([2, 3, 4])
+    b = ext - a * x
+    if b < -20 or b > 40:
+        a = 2
+        x = rng.randint(2, 12)
+        b = ext - a * x
+
+    prompt = f"A regular {n}-gon has exterior angle ({a}x {'+' if b>=0 else '-'} {abs(b)})°. Find x."
+    latex = ""
+    answer = rf"x = {x}"
+    working = [
+        ("text", "First find the exterior angle."),
+        ("math", rf"rac{{360}}{{{n}}} = {ext}^\circ"),
+        ("text", "Now form and solve an equation."),
+        ("math", rf"{a}x {'+' if b>=0 else '-'} {abs(b)} = {ext}"),
+        ("math", rf"{a}x = {ext - b}"),
+        ("math", rf"x = rac{{{ext - b}}}{{{a}}} = {x}"),
+    ]
+    return prompt, latex, answer, working
 
 TEMPLATES: List[Template] = [
     # Continuing sequences levels (pair-locked step/ratio)
@@ -1259,36 +1346,98 @@ TEMPLATES: List[Template] = [
 
     # Perimeter of rectilinear shapes
     Template(
-        "perim_rect",
-        "Perimeter of rectilinear shapes",
-        "rect",
-        "Rectangle",
-        1,
-        _gen_perim_rect,
+        template_id="perim_all",
+        topic="Perimeter of rectilinear shapes",
+        level_id="all",
+        level_name="All sides given",
+        difficulty=1,
+        generator=_gen_rect_perim_all,
     ),
     Template(
-        "perim_notch_all",
-        "Perimeter of rectilinear shapes",
-        "all",
-        "All lengths given",
-        2,
-        _gen_perim_notch_all,
+        template_id="perim_missing",
+        topic="Perimeter of rectilinear shapes",
+        level_id="missing",
+        level_name="Missing sides to work out",
+        difficulty=2,
+        generator=_gen_rect_perim_missing,
     ),
     Template(
-        "perim_notch_missing",
-        "Perimeter of rectilinear shapes",
-        "missing",
-        "Missing sides to work out",
-        3,
-        _gen_perim_notch_missing,
+        template_id="perim_find_x",
+        topic="Perimeter of rectilinear shapes",
+        level_id="find_x",
+        level_name="Perimeter given, find x",
+        difficulty=3,
+        generator=_gen_rect_perim_find_x,
+    ),
+
+    # Interior and exterior angles of polygons
+    Template(
+        template_id="poly_int",
+        topic="Interior and exterior angles of polygons",
+        level_id="int",
+        level_name="Interior angle (regular polygon)",
+        difficulty=1,
+        generator=_gen_poly_regular_interior,
     ),
     Template(
-        "perim_notch_givenP_x",
-        "Perimeter of rectilinear shapes",
-        "givenP",
-        "Given perimeter, find x",
-        4,
-        _gen_perim_notch_givenP_findx,
+        template_id="poly_ext",
+        topic="Interior and exterior angles of polygons",
+        level_id="ext",
+        level_name="Exterior angle (regular polygon)",
+        difficulty=2,
+        generator=_gen_poly_regular_exterior,
+    ),
+    Template(
+        template_id="poly_n_from_ext",
+        topic="Interior and exterior angles of polygons",
+        level_id="n_from_ext",
+        level_name="Find number of sides from exterior angle",
+        difficulty=3,
+        generator=_gen_poly_find_n_from_exterior,
+    ),
+    Template(
+        template_id="poly_sum",
+        topic="Interior and exterior angles of polygons",
+        level_id="sum",
+        level_name="Sum of interior angles",
+        difficulty=4,
+        generator=_gen_poly_sum_interior,
+    ),
+    Template(
+        template_id="poly_missing",
+        topic="Interior and exterior angles of polygons",
+        level_id="missing",
+        level_name="Missing interior angle (irregular)",
+        difficulty=5,
+        generator=_gen_poly_missing_irregular,
+    ),
+
+    # Reasoning with polygon angles
+    Template(
+        template_id="poly_tess",
+        topic="Reasoning with polygon angles",
+        level_id="tess",
+        level_name="Angles around a point (find n)",
+        difficulty=3,
+        generator=_gen_poly_tessellation_find_n,
+    ),
+
+    # Algebraic geometry and angle equations
+    Template(
+        template_id="poly_alg_int",
+        topic="Algebraic geometry and angle equations",
+        level_id="alg_int",
+        level_name="Interior angle with algebra (regular polygon)",
+        difficulty=4,
+        generator=_gen_poly_algebra_interior,
+    ),
+    Template(
+        template_id="poly_alg_ext",
+        topic="Algebraic geometry and angle equations",
+        level_id="alg_ext",
+        level_name="Exterior angle with algebra (regular polygon)",
+        difficulty=5,
+        generator=_gen_poly_algebra_exterior,
     ),
 
 ]
@@ -1345,11 +1494,12 @@ def generate_two_per_topic(
         for j in range(2):
             qseed = master.randint(1, 10**9)
             res = tmpl.generator(random.Random(qseed), qseed, pair_params)
+
+            diagram = None
             if isinstance(res, tuple) and len(res) == 5:
                 pr, latex, ans, working, diagram = res
             else:
                 pr, latex, ans, working = res
-                diagram = None
 
             pr = pr.strip()
             latex = _sanitize_math(latex)
@@ -1367,10 +1517,10 @@ def generate_two_per_topic(
                     prompt=pr,
                     latex=latex,
                     answer_latex=ans,
-                    diagram_png=diagram,
                     working=working2,
                     template_id=tmpl.template_id,
                     seed=qseed,
+                    diagram_png=diagram,
                 )
             )
         grouped[topic] = qs
@@ -1388,13 +1538,13 @@ def regenerate_question(
     tmpl = next((t for t in TEMPLATES if t.topic == topic and t.template_id == template_id and t.difficulty <= max_difficulty), None)
     if tmpl is None:
         raise ValueError("Template not found for regeneration.")
-
     res = tmpl.generator(random.Random(new_seed), new_seed, fixed_params)
+
+    diagram = None
     if isinstance(res, tuple) and len(res) == 5:
         pr, latex, ans, working, diagram = res
     else:
         pr, latex, ans, working = res
-        diagram = None
 
     pr = pr.strip()
     latex = _sanitize_math(latex)
@@ -1411,10 +1561,10 @@ def regenerate_question(
         prompt=pr,
         latex=latex,
         answer_latex=ans,
-        diagram_png=diagram,
         working=working2,
         template_id=tmpl.template_id,
         seed=new_seed,
+        diagram_png=diagram,
     )
 
 
