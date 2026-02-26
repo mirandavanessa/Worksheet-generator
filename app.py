@@ -32,6 +32,14 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
+BUILD_ID = "v35-area-perimeter-polygons"
+print(f"BUILD={BUILD_ID}")
+try:
+    print("AVAILABLE_TOPICS=", available_topics())
+except Exception as _e:
+    print("TOPIC_LOAD_ERROR", _e)
+
+
 # ---------- Callbacks ----------
 def _shift_level(topic: str, delta: int, ids: list[str], safe_topic: str, max_diff: int, seed: int) -> None:
     """Shift the selected level for a topic without triggering Streamlit session_state errors."""
@@ -1033,7 +1041,10 @@ with st.sidebar:
             max_value=10**9,
             value=int(st.session_state.master_seed),
         )
-        st.session_state.master_seed = int(master_seed_manual)
+
+    with st.expander("Diagnostics", expanded=False):
+        st.caption(f"Build: {BUILD_ID}")
+        st.write(available_topics())
 
 
 # ---------------- App modes ----------------
