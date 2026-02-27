@@ -992,11 +992,33 @@ def _render_practice_mode():
 with st.sidebar:
     st.header("Settings")
 
+    _all_topics = available_topics()
+
+    def _add_topic(_name: str):
+        cur = list(st.session_state.get("topics_select", []))
+        if _name not in cur:
+            cur.append(_name)
+        # keep the same ordering as _all_topics
+        cur = sorted(cur, key=lambda x: _all_topics.index(x) if x in _all_topics else 10**9)
+        st.session_state["topics_select"] = cur
+
     topics = st.multiselect(
         "Topics",
-        options=available_topics(),
-        default=[t for t in DEFAULT_TOPICS if t in available_topics()],
+        options=_all_topics,
+        default=[t for t in DEFAULT_TOPICS if t in _all_topics],
+        key="topics_select",
     )
+
+    st.caption("Tip: tap the Topics box and type 'Area', 'Perimeter' or 'Polygon' to find the new topics quickly.")
+
+    qa, qb, qc = st.columns(3)
+    with qa:
+        st.button("+ Area", on_click=_add_topic, args=("Area of shapes",), use_container_width=True)
+    with qb:
+        st.button("+ Perimeter", on_click=_add_topic, args=("Perimeter of rectilinear shapes",), use_container_width=True)
+    with qc:
+        st.button("+ Polygons", on_click=_add_topic, args=("Interior and exterior angles of polygons",), use_container_width=True)
+
     max_diff = st.slider("Max difficulty", 1, 5, 5)
 
     st.subheader("Levels")
