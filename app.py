@@ -32,7 +32,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v35-area-perimeter-polygons"
+BUILD_ID = "v39-topics-select-fix"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -1002,10 +1002,13 @@ with st.sidebar:
         cur = sorted(cur, key=lambda x: _all_topics.index(x) if x in _all_topics else 10**9)
         st.session_state["topics_select"] = cur
 
+    # Initialise topic selection once (do NOT also pass `default=` to the widget).
+    if "topics_select" not in st.session_state:
+        st.session_state["topics_select"] = [t for t in DEFAULT_TOPICS if t in _all_topics]
+
     topics = st.multiselect(
         "Topics",
         options=_all_topics,
-        default=[t for t in DEFAULT_TOPICS if t in _all_topics],
         key="topics_select",
     )
 
