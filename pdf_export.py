@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import matplotlib
 matplotlib.use("Agg")
@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.lib.utils import ImageReader
 
-from question_bank import GeneratedQuestion, WorkingStep
+from question_bank import GeneratedQuestion
 
 
 def _latex_png(latex: str, fontsize: int = 22, dpi: int = 300) -> Image.Image:
@@ -32,7 +32,14 @@ def _latex_png(latex: str, fontsize: int = 22, dpi: int = 300) -> Image.Image:
     return Image.open(buf).convert("RGBA")
 
 
-def _draw_math(c: canvas.Canvas, latex: str, x: float, y_top: float, max_w: float, target_h: float = 0.78 * cm) -> float:
+def _draw_math(
+    c: canvas.Canvas,
+    latex: str,
+    x: float,
+    y_top: float,
+    max_w: float,
+    target_h: float = 0.78 * cm,
+) -> float:
     img = _latex_png(latex)
     dpi = 300.0
     w_pt = (img.width / dpi) * 72.0
@@ -53,9 +60,14 @@ def _draw_math(c: canvas.Canvas, latex: str, x: float, y_top: float, max_w: floa
     return h
 
 
-
-
-def _draw_png(c: canvas.Canvas, png_bytes: bytes, x: float, y_top: float, max_w: float, max_h: float) -> float:
+def _draw_png(
+    c: canvas.Canvas,
+    png_bytes: bytes,
+    x: float,
+    y_top: float,
+    max_w: float,
+    max_h: float,
+) -> float:
     """Draw a PNG (bytes) scaled to fit within max_w x max_h. Returns height used."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
     dpi = 300.0
@@ -73,9 +85,17 @@ def _draw_png(c: canvas.Canvas, png_bytes: bytes, x: float, y_top: float, max_w:
     return h
 
 
-def _draw_wrapped_text(c: canvas.Canvas, text: str, x: float, y_top: float, max_w: float, font: str, size: int, leading: float) -> float:
+def _draw_wrapped_text(
+    c: canvas.Canvas,
+    text: str,
+    x: float,
+    y_top: float,
+    max_w: float,
+    font: str,
+    size: int,
+    leading: float,
+) -> float:
     c.setFont(font, size)
-    # naive word-wrap
     words = text.split()
     lines: List[str] = []
     cur = ""
@@ -115,37 +135,39 @@ def build_pdf_bytes(title: str, grouped: Dict[str, List[GeneratedQuestion]], see
     topics = list(grouped.keys())
     topics_per_page = 5
 
-    def draw_topic_row(y_top: float, topic: str, q_left: GeneratedQuestion, q_right: GeneratedQuestion, show_answers: bool) -> float:
+    def draw_topic_row(
+        y_top: float,
+        topic: str,
+        q_left: GeneratedQuestion,
+        q_right: GeneratedQuestion,
+        show_answers: bool,
+    ) -> float:
         row_h = (page_h - 2 * margin - 2.0 * cm) / topics_per_page
-        # topic label
+
         c.setFont("Helvetica-Bold", 11)
         c.drawString(margin, y_top, topic)
 
-        # content box top
         y_content = y_top - 0.35 * cm
-        # left column
         xL = margin
         xR = margin + col_w + col_gap
 
         def draw_one(q: GeneratedQuestion, x0: float):
-            # prompt
             used = 0.0
+
             used += _draw_wrapped_text(c, q.prompt, x0, y_content, col_w, "Helvetica", 10, leading=11)
-            # latex line (optional)
+
             y_math_top = y_content - used - 0.15 * cm
             if q.latex.strip():
-                h = _draw_math(c, q.latex, x0, y_math_top, max_w=col_w, target_h=0.72*cm)
+                h = _draw_math(c, q.latex, x0, y_math_top, max_w=col_w, target_h=0.72 * cm)
                 used2 = (0.15 * cm + h)
             else:
                 used2 = 0.0
             used_total = used + used2
 
-            # diagram (optional)
             used_diag = 0.0
-            if getattr(q, 'diagram_png', None):
+            if getattr(q, "diagram_png", None):
                 y_img_top = y_content - used_total - 0.10 * cm
-                # Fit diagram comfortably inside the row
-                used_diag = 0.10 * cm + _draw_png(c, q.diagram_png, x0, y_img_top, max_w=col_w, max_h=2.2*cm)
+                used_diag = 0.10 * cm + _draw_png(c, q.diagram_png, x0, y_img_top, max_w=col_w, max_h=2.2 * cm)
 
             used_total = used_total + used_diag
 
@@ -153,15 +175,20 @@ def build_pdf_bytes(title: str, grouped: Dict[str, List[GeneratedQuestion]], see
                 y_ans = y_content - used_total - 0.15 * cm
                 c.setFont("Helvetica", 10)
                 c.drawString(x0, y_ans, "Answer:")
-                _draw_math(c, q.answer_latex, x0 + 1.2 * cm, y_ans + 0.15 * cm, max_w=col_w - 1.2 * cm, target_h=0.68*cm)
-            return
+                _draw_math(
+                    c,
+                    q.answer_latex,
+                    x0 + 1.2 * cm,
+                    y_ans + 0.15 * cm,
+                    max_w=col_w - 1.2 * cm,
+                    target_h=0.68 * cm,
+                )
 
         draw_one(q_left, xL)
         draw_one(q_right, xR)
 
-        # horizontal separator
         c.setLineWidth(0.5)
-        c.line(margin, y_top - row_h + 0.15*cm, page_w - margin, y_top - row_h + 0.15*cm)
+        c.line(margin, y_top - row_h + 0.15 * cm, page_w - margin, y_top - row_h + 0.15 * cm)
         return y_top - row_h
 
     def draw_pages(show_answers: bool):
@@ -173,10 +200,9 @@ def build_pdf_bytes(title: str, grouped: Dict[str, List[GeneratedQuestion]], see
             c.drawRightString(page_w - margin, page_h - margin + 2, f"seed: {seed}")
 
             y = page_h - margin - 1.1 * cm
-            page_topics = topics[page_start:page_start + topics_per_page]
+            page_topics = topics[page_start : page_start + topics_per_page]
             for t in page_topics:
                 qs = grouped[t]
-                # pad if missing
                 q1 = qs[0]
                 q2 = qs[1] if len(qs) > 1 else qs[0]
                 y = draw_topic_row(y, t, q1, q2, show_answers=show_answers)

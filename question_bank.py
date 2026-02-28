@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import random
+import hashlib
 import io
+import random
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 from PIL import Image, ImageDraw, ImageFont
-from typing import Callable, Dict, List, Tuple, Optional, Any
 
 # -----------------------------
 # Helpers (formatting)
@@ -43,12 +45,11 @@ def _lin_expr(a: int, b: int, var: str = "x") -> str:
     ax = _fmt_coef(a, var)
     if b == 0:
         return ax
-    return f"{ax} {'+' if b>0 else '-'} {abs(b)}"
+    return f"{ax} {'+' if b > 0 else '-'} {abs(b)}"
 
 
 def _sequence_str(seq: List[int]) -> str:
-    # Use thin-spaces (\,) between terms to avoid accidental line-breaks (\\)
-    # and to keep output compatible with both KaTeX (Streamlit) and matplotlib mathtext.
+    # Use thin-spaces (\,) between terms to avoid accidental line-breaks
     return ",\\,".join(str(x) for x in seq) + r",\\,\\ldots"
 
 
@@ -57,16 +58,25 @@ def _sanitize_math(s: str) -> str:
     return (
         s.replace("\t", " ")
         .replace("\x0c", "")
-        # collapse accidental double-backslashes (e.g. \frac, \times, or line-breaks)
         .replace("\\\\", "\\")
         .replace("\\tfrac", "\\frac")
         .replace("\\dfrac", "\\frac")
     )
 
 
+def _sig(prompt: str, latex: str, diagram_png: Optional[bytes]) -> Tuple[str, str, str]:
+    """Signature used to prevent identical pairs in a topic."""
+    d = hashlib.md5(diagram_png).hexdigest() if diagram_png else ""
+    return (prompt.strip(), latex.strip(), d)
+
+
 # -----------------------------
 # Diagram helpers (PIL)
 # -----------------------------
+
+_BG = (0, 0, 0)
+_FG = (255, 255, 255)
+
 
 def _default_font(size: int = 18):
     try:
@@ -82,12 +92,8 @@ def _img_bytes(img: Image.Image) -> bytes:
 
 
 def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str) -> bytes:
-    """Simple rectilinear notch shape with labels.
-
-    Points define an outer rectangle with a notch cut from the top edge.
-    Labels are strings (e.g. '24', 'x', '?').
-    """
-    img = Image.new("RGB", (520, 240), (255, 255, 255))
+    """Rectilinear notch shape with labels. Black background, white lines."""
+    img = Image.new("RGB", (520, 240), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(18)
 
@@ -108,60 +114,50 @@ def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str)
     p7 = (x0, y1)
 
     pts = [p0, p1, p2, p3, p4, p5, p6, p7, p0]
-    draw.line(pts, fill=(0, 0, 0), width=4)
+    draw.line(pts, fill=_FG, width=4)
 
     def mid(a, b):
         return ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
 
-    # Bottom (W)
     mx, my = mid(p0, p1)
-    draw.text((mx - 12, my + 8), W, fill=(0, 0, 0), font=font)
+    draw.text((mx - 12, my + 8), W, fill=_FG, font=font)
 
-    # Right side (H)
     mx, my = mid(p1, p2)
-    draw.text((mx + 10, my - 10), H, fill=(0, 0, 0), font=font)
+    draw.text((mx + 10, my - 10), H, fill=_FG, font=font)
 
-    # Top-left segment (L1)
     mx, my = mid(p7, p6)
-    draw.text((mx - 12, my - 28), L1, fill=(0, 0, 0), font=font)
+    draw.text((mx - 12, my - 28), L1, fill=_FG, font=font)
 
-    # Notch bottom segment (w)
     mx, my = mid(p5, p4)
-    draw.text((mx - 8, my + 10), w, fill=(0, 0, 0), font=font)
+    draw.text((mx - 8, my + 10), w, fill=_FG, font=font)
 
-    # Top-right segment (L2)
     mx, my = mid(p3, p2)
-    draw.text((mx - 8, my - 28), L2, fill=(0, 0, 0), font=font)
+    draw.text((mx - 8, my - 28), L2, fill=_FG, font=font)
 
-    # Notch depth (d)
     mx, my = mid(p3, p4)
-    draw.text((mx + 10, my - 10), d, fill=(0, 0, 0), font=font)
+    draw.text((mx + 10, my - 10), d, fill=_FG, font=font)
 
     return _img_bytes(img)
 
 
-# --- Area diagram helpers (PIL) ---
-
 def _rectangle_diagram(L: str, W: str) -> bytes:
     """Axis-aligned rectangle labelled with length (bottom) and width (right)."""
-    img = Image.new("RGB", (420, 220), (255, 255, 255))
+    img = Image.new("RGB", (420, 220), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(18)
 
     x0, y0 = 70, 180
     x1, y1 = 350, 60
-    draw.rectangle([x0, y1, x1, y0], outline=(0, 0, 0), width=4)
+    draw.rectangle([x0, y1, x1, y0], outline=_FG, width=4)
 
-    # labels
-    draw.text(((x0 + x1) / 2 - 10, y0 + 8), L, fill=(0, 0, 0), font=font)
-    draw.text((x1 + 10, (y0 + y1) / 2 - 10), W, fill=(0, 0, 0), font=font)
-
+    draw.text(((x0 + x1) / 2 - 10, y0 + 8), L, fill=_FG, font=font)
+    draw.text((x1 + 10, (y0 + y1) / 2 - 10), W, fill=_FG, font=font)
     return _img_bytes(img)
 
 
 def _triangle_diagram(base: str, height: str) -> bytes:
-    """Triangle with a dashed height dropped to the base (perpendicular)."""
-    img = Image.new("RGB", (420, 240), (255, 255, 255))
+    """Triangle with a height dropped to the base (perpendicular)."""
+    img = Image.new("RGB", (420, 240), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(18)
 
@@ -169,25 +165,25 @@ def _triangle_diagram(base: str, height: str) -> bytes:
     B = (340, 190)
     C = (260, 70)
 
-    draw.line([A, B, C, A], fill=(0, 0, 0), width=4)
+    draw.line([A, B, C, A], fill=_FG, width=4)
 
-    # height from C to base AB
     foot = (C[0], A[1])
-    draw.line([C, foot], fill=(0, 0, 0), width=2)
+    draw.line([C, foot], fill=_FG, width=2)
 
-    # right angle marker at foot
     ra = 10
-    draw.line([(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)], fill=(0, 0, 0), width=2)
+    draw.line(
+        [(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)],
+        fill=_FG,
+        width=2,
+    )
 
-    # labels
-    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), base, fill=(0, 0, 0), font=font)
-    draw.text((foot[0] + 10, (C[1] + foot[1]) / 2 - 10), height, fill=(0, 0, 0), font=font)
-
+    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), base, fill=_FG, font=font)
+    draw.text((foot[0] + 10, (C[1] + foot[1]) / 2 - 10), height, fill=_FG, font=font)
     return _img_bytes(img)
 
 
 def _parallelogram_diagram(base: str, height: str) -> bytes:
-    img = Image.new("RGB", (460, 240), (255, 255, 255))
+    img = Image.new("RGB", (460, 240), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(18)
 
@@ -196,25 +192,22 @@ def _parallelogram_diagram(base: str, height: str) -> bytes:
     D = (70, 80)
     C = (320, 80)
 
-    draw.line([A, B, C, D, A], fill=(0, 0, 0), width=4)
+    draw.line([A, B, C, D, A], fill=_FG, width=4)
 
-    # height from D to AB
     foot = (D[0], A[1])
-    draw.line([D, foot], fill=(0, 0, 0), width=2)
+    draw.line([D, foot], fill=_FG, width=2)
 
-    # right angle marker
     ra = 10
-    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=(0, 0, 0), width=2)
+    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
 
-    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), base, fill=(0, 0, 0), font=font)
-    draw.text((foot[0] - 25, (D[1] + foot[1]) / 2 - 10), height, fill=(0, 0, 0), font=font)
-
+    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), base, fill=_FG, font=font)
+    draw.text((foot[0] - 25, (D[1] + foot[1]) / 2 - 10), height, fill=_FG, font=font)
     return _img_bytes(img)
 
 
 def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
-    """Trapezium with parallel sides a (top) and b (bottom) and perpendicular height h."""
-    img = Image.new("RGB", (480, 260), (255, 255, 255))
+    """Trapezium with parallel sides a (top) and b (bottom) and height h."""
+    img = Image.new("RGB", (480, 260), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(18)
 
@@ -223,25 +216,23 @@ def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
     D = (160, 80)
     C = (320, 80)
 
-    draw.line([A, B, C, D, A], fill=(0, 0, 0), width=4)
+    draw.line([A, B, C, D, A], fill=_FG, width=4)
 
-    # height from D to AB
     foot = (D[0], A[1])
-    draw.line([D, foot], fill=(0, 0, 0), width=2)
+    draw.line([D, foot], fill=_FG, width=2)
 
     ra = 10
-    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=(0, 0, 0), width=2)
+    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
 
-    draw.text(((D[0] + C[0]) / 2 - 10, D[1] - 28), a, fill=(0, 0, 0), font=font)
-    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), b, fill=(0, 0, 0), font=font)
-    draw.text((foot[0] - 25, (D[1] + foot[1]) / 2 - 10), h, fill=(0, 0, 0), font=font)
-
+    draw.text(((D[0] + C[0]) / 2 - 10, D[1] - 28), a, fill=_FG, font=font)
+    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), b, fill=_FG, font=font)
+    draw.text((foot[0] - 25, (D[1] + foot[1]) / 2 - 10), h, fill=_FG, font=font)
     return _img_bytes(img)
 
 
 def _kite_diagram(d1: str, d2: str) -> bytes:
-    """Kite/rhombus style with diagonals labelled."""
-    img = Image.new("RGB", (420, 260), (255, 255, 255))
+    """Kite/rhombus with diagonals labelled."""
+    img = Image.new("RGB", (420, 260), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(18)
 
@@ -250,17 +241,19 @@ def _kite_diagram(d1: str, d2: str) -> bytes:
     bottom = (210, 210)
     left = (90, 130)
 
-    draw.line([top, right, bottom, left, top], fill=(0, 0, 0), width=4)
+    draw.line([top, right, bottom, left, top], fill=_FG, width=4)
 
-    # diagonals
-    draw.line([top, bottom], fill=(0, 0, 0), width=2)
-    draw.line([left, right], fill=(0, 0, 0), width=2)
+    draw.line([top, bottom], fill=_FG, width=2)
+    draw.line([left, right], fill=_FG, width=2)
 
-    # labels near diagonals
-    draw.text((225, 125), d1, fill=(0, 0, 0), font=font)  # vertical
-    draw.text((170, 145), d2, fill=(0, 0, 0), font=font)  # horizontal
-
+    draw.text((225, 125), d1, fill=_FG, font=font)
+    draw.text((170, 145), d2, fill=_FG, font=font)
     return _img_bytes(img)
+
+
+# -----------------------------
+# Data models
+# -----------------------------
 
 @dataclass(frozen=True)
 class GeneratedQuestion:
@@ -285,8 +278,9 @@ class Template:
     level_id: str
     level_name: str
     difficulty: int
-    generator: Callable[[random.Random, int, Optional[Dict[str, Any]]], Tuple[str, str, str, List[WorkingStep]]]
+    generator: Callable[[random.Random, int, Optional[Dict[str, Any]]], Tuple]
     pair_params_factory: Optional[Callable[[random.Random], Dict[str, Any]]] = None
+
 
 # -----------------------------
 # Generators
@@ -326,11 +320,8 @@ def _gen_seq_sub(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]
 
 
 def _gen_seq_mul(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    # Pair-locked ratio r, but starting value varies each regeneration.
     r = int(params["r"]) if params and "r" in params else rng.choice([2, 3])
 
-    # Keep values easy (avoid very large terms).
-    # We show 5 terms and ask for the next 2, so control the 5th term.
     def ok_start(a1: int) -> bool:
         term5 = a1 * (r ** 4)
         return term5 <= 200
@@ -358,15 +349,11 @@ def _gen_seq_mul(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]
 
 
 def _gen_seq_div(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    # Pair-locked divisor r, but starting value varies each regeneration.
-    # We guarantee the next two terms remain integers (no truncation).
     r = int(params["r"]) if params and "r" in params else rng.choice([2, 3])
 
-    # We build 5 terms by dividing 4 times, then ask for the next 2.
-    # Let term5 = k. To keep the next two terms integers, k must be a multiple of r^2.
     if r == 2:
         k_choices = [4, 8, 12, 16, 20]
-    else:  # r == 3
+    else:
         k_choices = [9, 18, 27]
 
     k = rng.choice(k_choices)
@@ -403,6 +390,7 @@ def _gen_seq_fibo(rng: random.Random, seed: int, params: Optional[Dict[str, Any]
         ("math", rf"{seq[-2]}+{seq[-1]}={nxt1}\\quad {seq[-1]}+{nxt1}={nxt2}"),
     ]
     return prompt, latex, answer, working
+
 
 # --- Finding the nth term (difference + 0th term method) ---
 
@@ -451,7 +439,7 @@ def _gen_use_nth_find_term(rng: random.Random, seed: int, params: Optional[Dict[
 
     working = [
         ("math", rf"a_n = {expr}"),
-        ("math", rf"a_{{{n}}} = {A}\\times {n} {'+' if B>=0 else '-'} {abs(B)} = {value}"),
+        ("math", rf"a_{{{n}}} = {A}\times {n} {'+' if B>=0 else '-'} {abs(B)} = {value}"),
     ]
     return prompt, latex, answer, working
 
@@ -479,12 +467,7 @@ def _gen_use_nth_find_n(rng: random.Random, seed: int, params: Optional[Dict[str
     return prompt, latex, answer, working
 
 
-
-
-# --- Using the nth term (check membership) ---
-
 def _gen_use_nth_is_term(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    """Given an nth term, decide whether a value is a term of the sequence."""
     a_sign = int(params.get("a_sign", 1)) if params else 1
     A = a_sign * rng.choice([2, 3, 4, 5, 6, 7, 8, 9])
     B = rng.randint(-20, 20)
@@ -497,7 +480,6 @@ def _gen_use_nth_is_term(rng: random.Random, seed: int, params: Optional[Dict[st
     if make_yes:
         target = term
     else:
-        # choose an offset so the resulting n is not an integer
         offset = rng.choice([1, 2, 3, 4, 5, 6, 7, 8, 9])
         divisor = abs(A)
         target = term + offset
@@ -510,7 +492,7 @@ def _gen_use_nth_is_term(rng: random.Random, seed: int, params: Optional[Dict[st
     latex = expr
 
     rhs = target - B
-    frac = Fraction(rhs, A)  # reduced; denominator positive
+    frac = Fraction(rhs, A)
     frac_tex = _fmt_frac(frac)
 
     sign = "+" if B >= 0 else "-"
@@ -530,6 +512,8 @@ def _gen_use_nth_is_term(rng: random.Random, seed: int, params: Optional[Dict[st
         working.append(("text", "n is not a positive integer, so it is not a term."))
 
     return prompt, latex, answer, working
+
+
 # --- Solving 1-step equations ---
 
 def _gen_eq_1_add(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
@@ -587,7 +571,7 @@ def _gen_eq_1_div(rng: random.Random, seed: int, params: Optional[Dict[str, Any]
     working = [
         ("math", latex),
         ("text", f"Multiply both sides by {a}."),
-        ("math", rf"x = {c}\\times {a} = {x}"),
+        ("math", rf"x = {c}\times {a} = {x}"),
     ]
     return prompt, latex, answer, working
 
@@ -637,6 +621,7 @@ def _gen_eq_2_a_bracket(rng: random.Random, seed: int, params: Optional[Dict[str
     ]
     return prompt, latex, answer, working
 
+
 # --- Percentages (non-calculator) ---
 
 def _gen_pct_noncalc(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
@@ -651,7 +636,7 @@ def _gen_pct_noncalc(rng: random.Random, seed: int, params: Optional[Dict[str, A
     elif level == "eighths":
         pct = rng.choice([12.5, 37.5])
         amount = rng.choice([80, 120, 160, 200, 240, 320, 400, 480, 560, 640, 720, 800])
-    else:  # decomp
+    else:
         pct = rng.choice([35, 45, 65])
         amount = rng.choice([120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 600, 640, 720, 800])
 
@@ -913,10 +898,6 @@ def _gen_complete_square_a_not1(rng: random.Random, seed: int, params: Optional[
     return prompt, expr, answer, working
 
 
-# -----------------------------
-# Templates / Levels
-# -----------------------------
-
 # --- Perimeter of rectilinear shapes (with diagrams) ---
 
 def _gen_rect_perim_all(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
@@ -938,7 +919,7 @@ def _gen_rect_perim_all(rng: random.Random, seed: int, params: Optional[Dict[str
     answer = rf"{P}\ \mathrm{{cm}}"
     working = [
         ("text", "Add all the outside edges around the shape."),
-        ("math", rf"P = 2\\times {W} + 2\\times {H} + 2\\times {d}"),
+        ("math", rf"P = 2\times {W} + 2\times {H} + 2\times {d}"),
         ("math", rf"P = {P}\ \mathrm{{cm}}"),
     ]
     return prompt, latex, answer, working, diagram
@@ -965,7 +946,7 @@ def _gen_rect_perim_missing(rng: random.Random, seed: int, params: Optional[Dict
         ("text", "First find the missing top length."),
         ("math", rf"{L2} = {W} - {L1} - {w}"),
         ("text", "Now add all the outside edges around the shape."),
-        ("math", rf"P = 2\\times {W} + 2\\times {H} + 2\\times {d}"),
+        ("math", rf"P = 2\times {W} + 2\times {H} + 2\times {d}"),
         ("math", rf"P = {P}\ \mathrm{{cm}}"),
     ]
     return prompt, latex, answer, working, diagram
@@ -990,13 +971,11 @@ def _gen_rect_perim_find_x(rng: random.Random, seed: int, params: Optional[Dict[
     answer = rf"x = {x}\ \mathrm{{cm}}"
     working = [
         ("text", "Write an expression for the perimeter."),
-        ("math", rf"{P} = 2\\times {W} + 2\\times {H} + 2x"),
+        ("math", rf"{P} = 2\times {W} + 2\times {H} + 2x"),
         ("math", rf"2x = {P - (2*W + 2*H)}"),
         ("math", rf"x = \\frac{{{P - (2*W + 2*H)}}}{{2}} = {x}"),
     ]
     return prompt, latex, answer, working, diagram
-
-
 
 
 # --- Area of shapes (with diagrams) ---
@@ -1007,7 +986,7 @@ def _gen_area_rectangle(rng: random.Random, seed: int, params: Optional[Dict[str
     A = L * W
     diagram = _rectangle_diagram(str(L), str(W))
 
-    prompt = "Find the area of the rectangle (in cm^2)."
+    prompt = "Find the area of the rectangle (in cm²)."
     latex = ""
     answer = rf"{A}\ \mathrm{{cm}}^2"
     working = [
@@ -1022,9 +1001,7 @@ def _gen_area_triangle(rng: random.Random, seed: int, params: Optional[Dict[str,
     b = rng.choice([6, 8, 10, 12, 14, 16, 18])
     h = rng.choice([4, 5, 6, 7, 8, 9, 10])
     A = b * h / 2
-    # keep integer area
     if A != int(A):
-        # force even b
         b = rng.choice([6, 8, 10, 12, 14, 16, 18])
         h = rng.choice([4, 6, 8, 10])
         A = b * h / 2
@@ -1032,7 +1009,7 @@ def _gen_area_triangle(rng: random.Random, seed: int, params: Optional[Dict[str,
 
     diagram = _triangle_diagram(str(b), str(h))
 
-    prompt = "Find the area of the triangle (in cm^2)."
+    prompt = "Find the area of the triangle (in cm²)."
     latex = ""
     answer = rf"{A}\ \mathrm{{cm}}^2"
     working = [
@@ -1049,7 +1026,7 @@ def _gen_area_parallelogram(rng: random.Random, seed: int, params: Optional[Dict
     A = b * h
     diagram = _parallelogram_diagram(str(b), str(h))
 
-    prompt = "Find the area of the parallelogram (in cm^2)."
+    prompt = "Find the area of the parallelogram (in cm²)."
     latex = ""
     answer = rf"{A}\ \mathrm{{cm}}^2"
     working = [
@@ -1074,7 +1051,7 @@ def _gen_area_trapezium(rng: random.Random, seed: int, params: Optional[Dict[str
 
     diagram = _trapezium_diagram(str(a), str(b), str(h))
 
-    prompt = "Find the area of the trapezium (in cm^2)."
+    prompt = "Find the area of the trapezium (in cm²)."
     latex = ""
     answer = rf"{A}\ \mathrm{{cm}}^2"
     working = [
@@ -1098,7 +1075,7 @@ def _gen_area_kite(rng: random.Random, seed: int, params: Optional[Dict[str, Any
 
     diagram = _kite_diagram(str(d1), str(d2))
 
-    prompt = "Find the area of the kite (in cm^2)."
+    prompt = "Find the area of the kite (in cm²)."
     latex = ""
     answer = rf"{A}\ \mathrm{{cm}}^2"
     working = [
@@ -1110,7 +1087,6 @@ def _gen_area_kite(rng: random.Random, seed: int, params: Optional[Dict[str, Any
 
 
 def _gen_area_compound_rectilinear(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    # Use the same notch shape as perimeter; compute area as big rectangle minus cut-out.
     W = rng.choice([18, 20, 22, 24, 26, 28, 30])
     H = rng.choice([12, 14, 16, 18, 20])
     w = rng.choice([6, 8, 10])
@@ -1127,7 +1103,7 @@ def _gen_area_compound_rectilinear(rng: random.Random, seed: int, params: Option
 
     diagram = _rectilinear_notch_diagram(str(W), str(H), str(L1), str(w), str(L2), str(d))
 
-    prompt = "Find the area of the compound rectilinear shape (in cm^2)."
+    prompt = "Find the area of the compound rectilinear shape (in cm²)."
     latex = ""
     answer = rf"{A}\ \mathrm{{cm}}^2"
     working = [
@@ -1142,14 +1118,13 @@ def _gen_area_compound_rectilinear(rng: random.Random, seed: int, params: Option
 
 
 def _gen_area_find_x(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    # Rectangle with one side x, other side known, and area given.
     W = rng.choice([4, 5, 6, 7, 8, 9, 10, 12])
     x = rng.choice([6, 7, 8, 9, 10, 12, 14, 15, 16])
     A = W * x
 
-    diagram = _rectangle_diagram('x', str(W))
+    diagram = _rectangle_diagram("x", str(W))
 
-    prompt = f"The area of the rectangle is {A} cm^2. Find x."
+    prompt = f"The area of the rectangle is {A} cm². Find x."
     latex = ""
     answer = rf"x = {x}\ \mathrm{{cm}}"
     working = [
@@ -1158,6 +1133,8 @@ def _gen_area_find_x(rng: random.Random, seed: int, params: Optional[Dict[str, A
         ("math", rf"x = \frac{{{A}}}{{{W}}} = {x}"),
     ]
     return prompt, latex, answer, working, diagram
+
+
 # --- Polygon angles ---
 
 def _gen_poly_regular_interior(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
@@ -1278,7 +1255,6 @@ def _gen_poly_algebra_interior(rng: random.Random, seed: int, params: Optional[D
     x = rng.randint(2, 10)
     a = rng.choice([2, 3, 4])
     b = interior - a * x
-    # ensure b reasonable
     if b < -20 or b > 80:
         a = 3
         x = rng.randint(2, 8)
@@ -1322,473 +1298,85 @@ def _gen_poly_algebra_exterior(rng: random.Random, seed: int, params: Optional[D
     ]
     return prompt, latex, answer, working
 
+
+# -----------------------------
+# Templates / Levels
+# -----------------------------
+
 TEMPLATES: List[Template] = [
-    # Continuing sequences levels (pair-locked step/ratio)
-    Template(
-        template_id="seq_add",
-        topic="Continuing sequences",
-        level_id="add",
-        level_name="Add the same amount",
-        difficulty=1,
-        generator=_gen_seq_add,
-    ),
-    Template(
-        template_id="seq_sub",
-        topic="Continuing sequences",
-        level_id="sub",
-        level_name="Subtract the same amount",
-        difficulty=2,
-        generator=_gen_seq_sub,
-    ),
-    Template(
-        template_id="seq_mul",
-        topic="Continuing sequences",
-        level_id="mul",
-        level_name="Multiply by the same number",
-        difficulty=3,
-        generator=_gen_seq_mul,
-    ),
-    Template(
-        template_id="seq_div",
-        topic="Continuing sequences",
-        level_id="div",
-        level_name="Divide by the same number",
-        difficulty=4,
-        generator=_gen_seq_div,
-    ),
-    Template(
-        template_id="seq_fibo",
-        topic="Continuing sequences",
-        level_id="fibo",
-        level_name="Fibonacci",
-        difficulty=5,
-        generator=_gen_seq_fibo,
-    ),
+    Template("seq_add", "Continuing sequences", "add", "Add the same amount", 1, _gen_seq_add),
+    Template("seq_sub", "Continuing sequences", "sub", "Subtract the same amount", 2, _gen_seq_sub),
+    Template("seq_mul", "Continuing sequences", "mul", "Multiply by the same number", 3, _gen_seq_mul),
+    Template("seq_div", "Continuing sequences", "div", "Divide by the same number", 4, _gen_seq_div),
+    Template("seq_fibo", "Continuing sequences", "fibo", "Fibonacci", 5, _gen_seq_fibo),
 
-    # Finding nth term levels (difference sign + 0th term sign)
-    Template(
-        template_id="nth_pp",
-        topic="Finding the nth term",
-        level_id="pp",
-        level_name="Positive difference, positive 0th term",
-        difficulty=1,
-        generator=lambda r, s, p: _gen_nth_term_arith(r, s, {"d_sign": 1, "a0_sign": 1}),
-    ),
-    Template(
-        template_id="nth_pn",
-        topic="Finding the nth term",
-        level_id="pn",
-        level_name="Positive difference, negative 0th term",
-        difficulty=2,
-        generator=lambda r, s, p: _gen_nth_term_arith(r, s, {"d_sign": 1, "a0_sign": -1}),
-    ),
-    Template(
-        template_id="nth_np",
-        topic="Finding the nth term",
-        level_id="np",
-        level_name="Negative difference, positive 0th term",
-        difficulty=3,
-        generator=lambda r, s, p: _gen_nth_term_arith(r, s, {"d_sign": -1, "a0_sign": 1}),
-    ),
-    Template(
-        template_id="nth_nn",
-        topic="Finding the nth term",
-        level_id="nn",
-        level_name="Negative difference, negative 0th term",
-        difficulty=4,
-        generator=lambda r, s, p: _gen_nth_term_arith(r, s, {"d_sign": -1, "a0_sign": -1}),
-    ),
+    Template("nth_pp", "Finding the nth term", "pp", "Positive difference, positive 0th term", 1, lambda r, s, p: _gen_nth_term_arith(r, s, {"d_sign": 1, "a0_sign": 1})),
+    Template("nth_pn", "Finding the nth term", "pn", "Positive difference, negative 0th term", 2, lambda r, s, p: _gen_nth_term_arith(r, s, {"d_sign": 1, "a0_sign": -1})),
+    Template("nth_np", "Finding the nth term", "np", "Negative difference, positive 0th term", 3, lambda r, s, p: _gen_nth_term_arith(r, s, {"d_sign": -1, "a0_sign": 1})),
+    Template("nth_nn", "Finding the nth term", "nn", "Negative difference, negative 0th term", 4, lambda r, s, p: _gen_nth_term_arith(r, s, {"d_sign": -1, "a0_sign": -1})),
 
-    # Using nth term
-    Template(
-        template_id="use_term_pos",
-        topic="Using the nth term",
-        level_id="term_pos",
-        level_name="Find a term (positive coefficient)",
-        difficulty=1,
-        generator=lambda r, s, p: _gen_use_nth_find_term(r, s, {"a_sign": 1}),
-    ),
-    Template(
-        template_id="use_term_neg",
-        topic="Using the nth term",
-        level_id="term_neg",
-        level_name="Find a term (negative coefficient)",
-        difficulty=2,
-        generator=lambda r, s, p: _gen_use_nth_find_term(r, s, {"a_sign": -1}),
-    ),
-    Template(
-        template_id="use_n_pos",
-        topic="Using the nth term",
-        level_id="n_pos",
-        level_name="Find n (positive coefficient)",
-        difficulty=3,
-        generator=lambda r, s, p: _gen_use_nth_find_n(r, s, {"a_sign": 1}),
-    ),
-    Template(
-        template_id="use_n_neg",
-        topic="Using the nth term",
-        level_id="n_neg",
-        level_name="Find n (negative coefficient)",
-        difficulty=4,
-        generator=lambda r, s, p: _gen_use_nth_find_n(r, s, {"a_sign": -1}),
-    ),
+    Template("use_term_pos", "Using the nth term", "term_pos", "Find a term (positive coefficient)", 1, lambda r, s, p: _gen_use_nth_find_term(r, s, {"a_sign": 1})),
+    Template("use_term_neg", "Using the nth term", "term_neg", "Find a term (negative coefficient)", 2, lambda r, s, p: _gen_use_nth_find_term(r, s, {"a_sign": -1})),
+    Template("use_n_pos", "Using the nth term", "n_pos", "Find n (positive coefficient)", 3, lambda r, s, p: _gen_use_nth_find_n(r, s, {"a_sign": 1})),
+    Template("use_n_neg", "Using the nth term", "n_neg", "Find n (negative coefficient)", 4, lambda r, s, p: _gen_use_nth_find_n(r, s, {"a_sign": -1})),
 
+    Template("use_is_term_pos", "Using the nth term", "is_term_pos", "Is a value a term? (positive coefficient)", 5, lambda r, s, p: _gen_use_nth_is_term(r, s, {"a_sign": 1})),
+    Template("use_is_term_neg", "Using the nth term", "is_term_neg", "Is a value a term? (negative coefficient)", 5, lambda r, s, p: _gen_use_nth_is_term(r, s, {"a_sign": -1})),
 
-    Template(
-        template_id="use_is_term_pos",
-        topic="Using the nth term",
-        level_id="is_term_pos",
-        level_name="Is a value a term? (positive coefficient)",
-        difficulty=5,
-        generator=lambda r, s, p: _gen_use_nth_is_term(r, s, {"a_sign": 1}),
-    ),
-    Template(
-        template_id="use_is_term_neg",
-        topic="Using the nth term",
-        level_id="is_term_neg",
-        level_name="Is a value a term? (negative coefficient)",
-        difficulty=5,
-        generator=lambda r, s, p: _gen_use_nth_is_term(r, s, {"a_sign": -1}),
-    ),
-    # 1-step equations
     Template("eq1_add", "Solving 1 step equations", "add", "x + b = c", 1, _gen_eq_1_add),
     Template("eq1_sub", "Solving 1 step equations", "sub", "x - b = c", 2, _gen_eq_1_sub),
     Template("eq1_mul", "Solving 1 step equations", "mul", "ax = c", 3, _gen_eq_1_mul),
     Template("eq1_div", "Solving 1 step equations", "div", "x/a = c", 4, _gen_eq_1_div),
 
-    # 2-step equations
-    Template(
-        "eq2_plus",
-        "Solving 2 step equations",
-        "ax_plus",
-        "ax + b = c (b positive)",
-        1,
-        lambda r, s, p: _gen_eq_2_ax_plus_b(r, s, {"b_sign": 1}),
-    ),
-    Template(
-        "eq2_minus",
-        "Solving 2 step equations",
-        "ax_minus",
-        "ax - b = c (b positive)",
-        2,
-        lambda r, s, p: _gen_eq_2_ax_plus_b(r, s, {"b_sign": -1}),
-    ),
-    Template(
-        "eq2_br_plus",
-        "Solving 2 step equations",
-        "a_br_plus",
-        "a(x + b) = c",
-        3,
-        lambda r, s, p: _gen_eq_2_a_bracket(r, s, {"inside_sign": 1}),
-    ),
-    Template(
-        "eq2_br_minus",
-        "Solving 2 step equations",
-        "a_br_minus",
-        "a(x - b) = c",
-        4,
-        lambda r, s, p: _gen_eq_2_a_bracket(r, s, {"inside_sign": -1}),
-    ),
+    Template("eq2_plus", "Solving 2 step equations", "ax_plus", "ax + b = c (b positive)", 1, lambda r, s, p: _gen_eq_2_ax_plus_b(r, s, {"b_sign": 1})),
+    Template("eq2_minus", "Solving 2 step equations", "ax_minus", "ax - b = c (b positive)", 2, lambda r, s, p: _gen_eq_2_ax_plus_b(r, s, {"b_sign": -1})),
+    Template("eq2_br_plus", "Solving 2 step equations", "a_br_plus", "a(x + b) = c", 3, lambda r, s, p: _gen_eq_2_a_bracket(r, s, {"inside_sign": 1})),
+    Template("eq2_br_minus", "Solving 2 step equations", "a_br_minus", "a(x - b) = c", 4, lambda r, s, p: _gen_eq_2_a_bracket(r, s, {"inside_sign": -1})),
 
-    # Percent of an amount (non-calc)
-    Template(
-        "pct_nc_simple",
-        "Finding percentages using non-calculator methods",
-        "simple",
-        "10%, 20%, 25%, 50%",
-        1,
-        lambda r, s, p: _gen_pct_noncalc(r, s, {"level": "simple"}),
-    ),
-    Template(
-        "pct_nc_5_15",
-        "Finding percentages using non-calculator methods",
-        "five_fifteen",
-        "5% and 15%",
-        2,
-        lambda r, s, p: _gen_pct_noncalc(r, s, {"level": "five_fifteen"}),
-    ),
-    Template(
-        "pct_nc_eighths",
-        "Finding percentages using non-calculator methods",
-        "eighths",
-        "12.5% and 37.5%",
-        3,
-        lambda r, s, p: _gen_pct_noncalc(r, s, {"level": "eighths"}),
-    ),
-    Template(
-        "pct_nc_decomp",
-        "Finding percentages using non-calculator methods",
-        "decomp",
-        "Build from 10% and 5%",
-        4,
-        lambda r, s, p: _gen_pct_noncalc(r, s, {"level": "decomp"}),
-    ),
+    Template("pct_nc_simple", "Finding percentages using non-calculator methods", "simple", "10%, 20%, 25%, 50%", 1, lambda r, s, p: _gen_pct_noncalc(r, s, {"level": "simple"})),
+    Template("pct_nc_5_15", "Finding percentages using non-calculator methods", "five_fifteen", "5% and 15%", 2, lambda r, s, p: _gen_pct_noncalc(r, s, {"level": "five_fifteen"})),
+    Template("pct_nc_eighths", "Finding percentages using non-calculator methods", "eighths", "12.5% and 37.5%", 3, lambda r, s, p: _gen_pct_noncalc(r, s, {"level": "eighths"})),
+    Template("pct_nc_decomp", "Finding percentages using non-calculator methods", "decomp", "Build from 10% and 5%", 4, lambda r, s, p: _gen_pct_noncalc(r, s, {"level": "decomp"})),
 
-    # Percent of an amount (calc)
-    Template(
-        "pct_c_int",
-        "Finding percentages using calculator methods",
-        "int",
-        "Whole-number percentages",
-        1,
-        lambda r, s, p: _gen_pct_calc(r, s, {"level": "int"}),
-    ),
-    Template(
-        "pct_c_dec",
-        "Finding percentages using calculator methods",
-        "dec",
-        "Decimal percentages (e.g. 12.5%)",
-        2,
-        lambda r, s, p: _gen_pct_calc(r, s, {"level": "dec"}),
-    ),
+    Template("pct_c_int", "Finding percentages using calculator methods", "int", "Whole-number percentages", 1, lambda r, s, p: _gen_pct_calc(r, s, {"level": "int"})),
+    Template("pct_c_dec", "Finding percentages using calculator methods", "dec", "Decimal percentages (e.g. 12.5%)", 2, lambda r, s, p: _gen_pct_calc(r, s, {"level": "dec"})),
 
-    # Inc/dec non-calc
-    Template(
-        "inc_nc_simple",
-        "Increasing and decreasing by percentages using non-calculator methods",
-        "inc_simple",
-        "Increase by 10%, 20% or 25%",
-        1,
-        lambda r, s, p: _gen_inc_dec_noncalc(r, s, {"direction": "increase", "family": "simple"}),
-    ),
-    Template(
-        "dec_nc_simple",
-        "Increasing and decreasing by percentages using non-calculator methods",
-        "dec_simple",
-        "Decrease by 10%, 20% or 25%",
-        2,
-        lambda r, s, p: _gen_inc_dec_noncalc(r, s, {"direction": "decrease", "family": "simple"}),
-    ),
-    Template(
-        "inc_nc_mix",
-        "Increasing and decreasing by percentages using non-calculator methods",
-        "inc_mix",
-        "Increase by 5%, 15% or 30%",
-        3,
-        lambda r, s, p: _gen_inc_dec_noncalc(r, s, {"direction": "increase", "family": "mix"}),
-    ),
-    Template(
-        "dec_nc_mix",
-        "Increasing and decreasing by percentages using non-calculator methods",
-        "dec_mix",
-        "Decrease by 5%, 15% or 30%",
-        4,
-        lambda r, s, p: _gen_inc_dec_noncalc(r, s, {"direction": "decrease", "family": "mix"}),
-    ),
+    Template("inc_nc_simple", "Increasing and decreasing by percentages using non-calculator methods", "inc_simple", "Increase by 10%, 20% or 25%", 1, lambda r, s, p: _gen_inc_dec_noncalc(r, s, {"direction": "increase", "family": "simple"})),
+    Template("dec_nc_simple", "Increasing and decreasing by percentages using non-calculator methods", "dec_simple", "Decrease by 10%, 20% or 25%", 2, lambda r, s, p: _gen_inc_dec_noncalc(r, s, {"direction": "decrease", "family": "simple"})),
+    Template("inc_nc_mix", "Increasing and decreasing by percentages using non-calculator methods", "inc_mix", "Increase by 5%, 15% or 30%", 3, lambda r, s, p: _gen_inc_dec_noncalc(r, s, {"direction": "increase", "family": "mix"})),
+    Template("dec_nc_mix", "Increasing and decreasing by percentages using non-calculator methods", "dec_mix", "Decrease by 5%, 15% or 30%", 4, lambda r, s, p: _gen_inc_dec_noncalc(r, s, {"direction": "decrease", "family": "mix"})),
 
-    # Inc/dec calc
-    Template(
-        "inc_c",
-        "Increasing and decreasing by percentages using calculator methods",
-        "inc",
-        "Increase using a multiplier",
-        1,
-        lambda r, s, p: _gen_inc_dec_calc(r, s, {"direction": "increase"}),
-    ),
-    Template(
-        "dec_c",
-        "Increasing and decreasing by percentages using calculator methods",
-        "dec",
-        "Decrease using a multiplier",
-        2,
-        lambda r, s, p: _gen_inc_dec_calc(r, s, {"direction": "decrease"}),
-    ),
+    Template("inc_c", "Increasing and decreasing by percentages using calculator methods", "inc", "Increase using a multiplier", 1, lambda r, s, p: _gen_inc_dec_calc(r, s, {"direction": "increase"})),
+    Template("dec_c", "Increasing and decreasing by percentages using calculator methods", "dec", "Decrease using a multiplier", 2, lambda r, s, p: _gen_inc_dec_calc(r, s, {"direction": "decrease"})),
 
-    # Completing the square
-    Template(
-        "cs_even",
-        "Completing the square",
-        "a1_even",
-        "a = 1, even x coefficient",
-        1,
-        lambda r, s, p: _gen_complete_square_a1(r, s, {"b_parity": "even"}),
-    ),
-    Template(
-        "cs_odd",
-        "Completing the square",
-        "a1_odd",
-        "a = 1, odd x coefficient",
-        2,
-        lambda r, s, p: _gen_complete_square_a1(r, s, {"b_parity": "odd"}),
-    ),
-    Template(
-        "cs_a_int",
-        "Completing the square",
-        "a_int",
-        "a \\neq 1, integer half inside",
-        3,
-        lambda r, s, p: _gen_complete_square_a_not1(r, s, {"frac_inside": False}),
-    ),
-    Template(
-        "cs_a_frac",
-        "Completing the square",
-        "a_frac",
-        "a \\neq 1, fractional half inside",
-        4,
-        lambda r, s, p: _gen_complete_square_a_not1(r, s, {"frac_inside": True}),
-    ),
+    Template("cs_even", "Completing the square", "a1_even", "a = 1, even x coefficient", 1, lambda r, s, p: _gen_complete_square_a1(r, s, {"b_parity": "even"})),
+    Template("cs_odd", "Completing the square", "a1_odd", "a = 1, odd x coefficient", 2, lambda r, s, p: _gen_complete_square_a1(r, s, {"b_parity": "odd"})),
+    Template("cs_a_int", "Completing the square", "a_int", "a \\neq 1, integer half inside", 3, lambda r, s, p: _gen_complete_square_a_not1(r, s, {"frac_inside": False})),
+    Template("cs_a_frac", "Completing the square", "a_frac", "a \\neq 1, fractional half inside", 4, lambda r, s, p: _gen_complete_square_a_not1(r, s, {"frac_inside": True})),
 
+    Template("area_rect", "Area of shapes", "rect", "Rectangle", 1, _gen_area_rectangle),
+    Template("area_tri", "Area of shapes", "tri", "Triangle", 2, _gen_area_triangle),
+    Template("area_para", "Area of shapes", "para", "Parallelogram", 2, _gen_area_parallelogram),
+    Template("area_trap", "Area of shapes", "trap", "Trapezium", 3, _gen_area_trapezium),
+    Template("area_kite", "Area of shapes", "kite", "Kite / rhombus (diagonals)", 3, _gen_area_kite),
+    Template("area_compound", "Area of shapes", "compound", "Compound rectilinear", 4, _gen_area_compound_rectilinear),
+    Template("area_find_x", "Area of shapes", "find_x", "Given area, find x", 5, _gen_area_find_x),
 
+    Template("perim_all", "Perimeter of rectilinear shapes", "all", "All sides given", 1, _gen_rect_perim_all),
+    Template("perim_missing", "Perimeter of rectilinear shapes", "missing", "Missing sides to work out", 2, _gen_rect_perim_missing),
+    Template("perim_find_x", "Perimeter of rectilinear shapes", "find_x", "Perimeter given, find x", 3, _gen_rect_perim_find_x),
 
-    # Area of shapes
-    Template(
-        template_id="area_rect",
-        topic="Area of shapes",
-        level_id="rect",
-        level_name="Rectangle",
-        difficulty=1,
-        generator=_gen_area_rectangle,
-    ),
-    Template(
-        template_id="area_tri",
-        topic="Area of shapes",
-        level_id="tri",
-        level_name="Triangle",
-        difficulty=2,
-        generator=_gen_area_triangle,
-    ),
-    Template(
-        template_id="area_para",
-        topic="Area of shapes",
-        level_id="para",
-        level_name="Parallelogram",
-        difficulty=2,
-        generator=_gen_area_parallelogram,
-    ),
-    Template(
-        template_id="area_trap",
-        topic="Area of shapes",
-        level_id="trap",
-        level_name="Trapezium",
-        difficulty=3,
-        generator=_gen_area_trapezium,
-    ),
-    Template(
-        template_id="area_kite",
-        topic="Area of shapes",
-        level_id="kite",
-        level_name="Kite / rhombus (diagonals)",
-        difficulty=3,
-        generator=_gen_area_kite,
-    ),
-    Template(
-        template_id="area_compound",
-        topic="Area of shapes",
-        level_id="compound",
-        level_name="Compound rectilinear",
-        difficulty=4,
-        generator=_gen_area_compound_rectilinear,
-    ),
-    Template(
-        template_id="area_find_x",
-        topic="Area of shapes",
-        level_id="find_x",
-        level_name="Given area, find x",
-        difficulty=5,
-        generator=_gen_area_find_x,
-    ),
-    # Perimeter of rectilinear shapes
-    Template(
-        template_id="perim_all",
-        topic="Perimeter of rectilinear shapes",
-        level_id="all",
-        level_name="All sides given",
-        difficulty=1,
-        generator=_gen_rect_perim_all,
-    ),
-    Template(
-        template_id="perim_missing",
-        topic="Perimeter of rectilinear shapes",
-        level_id="missing",
-        level_name="Missing sides to work out",
-        difficulty=2,
-        generator=_gen_rect_perim_missing,
-    ),
-    Template(
-        template_id="perim_find_x",
-        topic="Perimeter of rectilinear shapes",
-        level_id="find_x",
-        level_name="Perimeter given, find x",
-        difficulty=3,
-        generator=_gen_rect_perim_find_x,
-    ),
+    Template("poly_int", "Interior and exterior angles of polygons", "int", "Interior angle (regular polygon)", 1, _gen_poly_regular_interior),
+    Template("poly_ext", "Interior and exterior angles of polygons", "ext", "Exterior angle (regular polygon)", 2, _gen_poly_regular_exterior),
+    Template("poly_n_from_ext", "Interior and exterior angles of polygons", "n_from_ext", "Find number of sides from exterior angle", 3, _gen_poly_find_n_from_exterior),
+    Template("poly_sum", "Interior and exterior angles of polygons", "sum", "Sum of interior angles", 4, _gen_poly_sum_interior),
+    Template("poly_missing", "Interior and exterior angles of polygons", "missing", "Missing interior angle (irregular)", 5, _gen_poly_missing_irregular),
 
-    # Interior and exterior angles of polygons
-    Template(
-        template_id="poly_int",
-        topic="Interior and exterior angles of polygons",
-        level_id="int",
-        level_name="Interior angle (regular polygon)",
-        difficulty=1,
-        generator=_gen_poly_regular_interior,
-    ),
-    Template(
-        template_id="poly_ext",
-        topic="Interior and exterior angles of polygons",
-        level_id="ext",
-        level_name="Exterior angle (regular polygon)",
-        difficulty=2,
-        generator=_gen_poly_regular_exterior,
-    ),
-    Template(
-        template_id="poly_n_from_ext",
-        topic="Interior and exterior angles of polygons",
-        level_id="n_from_ext",
-        level_name="Find number of sides from exterior angle",
-        difficulty=3,
-        generator=_gen_poly_find_n_from_exterior,
-    ),
-    Template(
-        template_id="poly_sum",
-        topic="Interior and exterior angles of polygons",
-        level_id="sum",
-        level_name="Sum of interior angles",
-        difficulty=4,
-        generator=_gen_poly_sum_interior,
-    ),
-    Template(
-        template_id="poly_missing",
-        topic="Interior and exterior angles of polygons",
-        level_id="missing",
-        level_name="Missing interior angle (irregular)",
-        difficulty=5,
-        generator=_gen_poly_missing_irregular,
-    ),
+    Template("poly_tess", "Reasoning with polygon angles", "tess", "Angles around a point (find n)", 3, _gen_poly_tessellation_find_n),
 
-    # Reasoning with polygon angles
-    Template(
-        template_id="poly_tess",
-        topic="Reasoning with polygon angles",
-        level_id="tess",
-        level_name="Angles around a point (find n)",
-        difficulty=3,
-        generator=_gen_poly_tessellation_find_n,
-    ),
-
-    # Algebraic geometry and angle equations
-    Template(
-        template_id="poly_alg_int",
-        topic="Algebraic geometry and angle equations",
-        level_id="alg_int",
-        level_name="Interior angle with algebra (regular polygon)",
-        difficulty=4,
-        generator=_gen_poly_algebra_interior,
-    ),
-    Template(
-        template_id="poly_alg_ext",
-        topic="Algebraic geometry and angle equations",
-        level_id="alg_ext",
-        level_name="Exterior angle with algebra (regular polygon)",
-        difficulty=5,
-        generator=_gen_poly_algebra_exterior,
-    ),
-
+    Template("poly_alg_int", "Algebraic geometry and angle equations", "alg_int", "Interior angle with algebra (regular polygon)", 4, _gen_poly_algebra_interior),
+    Template("poly_alg_ext", "Algebraic geometry and angle equations", "alg_ext", "Exterior angle with algebra (regular polygon)", 5, _gen_poly_algebra_exterior),
 ]
-
-
-# -----------------------------
-# Public API
-# -----------------------------
 
 
 TOPIC_ORDER: List[str] = [
@@ -1809,11 +1397,11 @@ TOPIC_ORDER: List[str] = [
     "Algebraic geometry and angle equations",
 ]
 
+
 def available_topics() -> List[str]:
     topics = {t.topic for t in TEMPLATES}
     order = {name: i for i, name in enumerate(TOPIC_ORDER)}
     return sorted(topics, key=lambda t: (order.get(t, 10**9), t))
-
 
 
 def available_levels(topic: str, max_difficulty: int = 5) -> List[Tuple[str, str]]:
@@ -1840,7 +1428,7 @@ def generate_two_per_topic(
     max_difficulty: int,
     seed: int,
 ) -> Tuple[Dict[str, List[GeneratedQuestion]], Dict[str, Optional[Dict[str, Any]]], Dict[str, str]]:
-    """Return (grouped_questions, pair_params_map, level_name_map)."""
+    """Return (grouped_questions, pair_params_map, level_name_map). Ensures pair uniqueness per topic."""
     master = random.Random(seed)
 
     grouped: Dict[str, List[GeneratedQuestion]] = {}
@@ -1855,38 +1443,50 @@ def generate_two_per_topic(
         pair_params_map[topic] = pair_params
 
         qs: List[GeneratedQuestion] = []
+        sig0: Optional[Tuple[str, str, str]] = None
+
         for j in range(2):
-            qseed = master.randint(1, 10**9)
-            res = tmpl.generator(random.Random(qseed), qseed, pair_params)
+            # Re-roll second question if it is identical to the first (same prompt/latex/diagram).
+            for attempt in range(60):
+                qseed = master.randint(1, 10**9)
+                res = tmpl.generator(random.Random(qseed), qseed, pair_params)
 
-            diagram = None
-            if isinstance(res, tuple) and len(res) == 5:
-                pr, latex, ans, working, diagram = res
-            else:
-                pr, latex, ans, working = res
+                diagram = None
+                if isinstance(res, tuple) and len(res) == 5:
+                    pr, latex, ans, working, diagram = res
+                else:
+                    pr, latex, ans, working = res
 
-            pr = pr.strip()
-            latex = _sanitize_math(latex)
-            ans = _sanitize_math(ans)
-            working2: List[WorkingStep] = [(k, _sanitize_math(v)) for (k, v) in working]
+                pr = pr.strip()
+                latex = _sanitize_math(latex)
+                ans = _sanitize_math(ans)
+                working2: List[WorkingStep] = [(k, _sanitize_math(v)) for (k, v) in working]
 
-            qid = f"{topic}__{tmpl.template_id}__{j+1}__{qseed}"
-            qs.append(
-                GeneratedQuestion(
-                    qid=qid,
-                    topic=topic,
-                    level_id=tmpl.level_id,
-                    level_name=tmpl.level_name,
-                    difficulty=tmpl.difficulty,
-                    prompt=pr,
-                    latex=latex,
-                    answer_latex=ans,
-                    working=working2,
-                    template_id=tmpl.template_id,
-                    seed=qseed,
-                    diagram_png=diagram,
+                cand_sig = _sig(pr, latex, diagram)
+                if j == 0:
+                    sig0 = cand_sig
+                if j == 1 and sig0 is not None and cand_sig == sig0 and attempt < 59:
+                    continue  # identical; try again
+
+                qid = f"{topic}__{tmpl.template_id}__{j+1}__{qseed}"
+                qs.append(
+                    GeneratedQuestion(
+                        qid=qid,
+                        topic=topic,
+                        level_id=tmpl.level_id,
+                        level_name=tmpl.level_name,
+                        difficulty=tmpl.difficulty,
+                        prompt=pr,
+                        latex=latex,
+                        answer_latex=ans,
+                        working=working2,
+                        template_id=tmpl.template_id,
+                        seed=qseed,
+                        diagram_png=diagram,
+                    )
                 )
-            )
+                break
+
         grouped[topic] = qs
 
     return grouped, pair_params_map, level_name_map
@@ -1948,7 +1548,7 @@ def generate_questions_by_template(
 
 
 # --- Module diagnostics (prints to Streamlit logs) ---
-QB_BUILD = "v36-qbank-topics-area-perimeter-polygons"
+QB_BUILD = "v39-qbank-black-diagrams-unique-pairs"
 try:
     print(f"QB_BUILD={QB_BUILD}")
     print("QB_TOPICS=" + " | ".join(available_topics()))
