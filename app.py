@@ -41,6 +41,11 @@ st.markdown(
 /* Slight top padding so controls aren't hidden behind Streamlit header */
 .block-container { padding-top: 3.4rem; }
 
+
+/* Topic titles above each question pair */
+.topic-title, .topic-title * {
+  color: #555555 !important;
+}
 /* Action buttons (N/A/W/D/I/H etc + font size controls): keep tiny + dark grey.
    IMPORTANT: Streamlit renders button labels using a nested stMarkdownContainer,
    so we must override that too; otherwise the global text-scaling CSS will enlarge them.
