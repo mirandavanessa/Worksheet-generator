@@ -593,7 +593,7 @@ _inject_overlay_timer()
 
 
 # ---------------- Instruction line (cycle) ----------------
-def _instruction_line(slot: str):
+def _instruction_line(slot: str, *, align: str = "left"):
     state_key = f"inst_state__{slot}"
     _set_default(state_key, 0)
 
@@ -619,7 +619,17 @@ def _instruction_line(slot: str):
 
     with ctext:
         safe_msg = msg if msg else "&nbsp;"
-        st.markdown(f"<div class='inst-line' style='color:{color};'>{safe_msg}</div>", unsafe_allow_html=True)
+
+        # Left question: left aligned. Right question: right aligned.
+        if align == "right":
+            extra = "justify-content:flex-end;text-align:right;"
+        else:
+            extra = "justify-content:flex-start;text-align:left;"
+
+        st.markdown(
+            f"<div class='inst-line' style='color:{color};{extra}'>{safe_msg}</div>",
+            unsafe_allow_html=True,
+        )
 
 
 # ---------------- Canvas ----------------
@@ -932,7 +942,7 @@ for topic in ordered_topics:
 
     with c1:
         q1 = grouped[topic][0]
-        _instruction_line(slot1)
+        _instruction_line(slot1, align="left")
 
         st.markdown(f"**{_pretty_text(q1.prompt)}**")
         if q1.latex.strip():
@@ -990,7 +1000,7 @@ for topic in ordered_topics:
 
     with c2:
         q2 = grouped[topic][1]
-        _instruction_line(slot2)
+        _instruction_line(slot2, align="right")
 
         if not st.session_state.get(show2_key, False):
             st.markdown("&nbsp;", unsafe_allow_html=True)
