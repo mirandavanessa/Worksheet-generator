@@ -41,11 +41,6 @@ st.markdown(
 /* Slight top padding so controls aren't hidden behind Streamlit header */
 .block-container { padding-top: 3.4rem; }
 
-
-/* Topic titles above each question pair */
-.topic-title, .topic-title * {
-  color: #555555 !important;
-}
 /* Action buttons (N/A/W/D/I/H etc + font size controls): keep tiny + dark grey.
    IMPORTANT: Streamlit renders button labels using a nested stMarkdownContainer,
    so we must override that too; otherwise the global text-scaling CSS will enlarge them.
@@ -115,6 +110,36 @@ div[data-testid="stSidebar"] button[data-testid="baseButton-primary"] {
   padding: 6px 12px !important;
 }
 div[data-testid="stSidebar"] button[kind="primary"] * { color: #FFFFFF !important; }
+
+/* Topic title styling (small + dark grey) */
+.topic-title {
+  font-size: 0.78rem !important;
+  color: #555555 !important;
+  font-weight: 650 !important;
+  margin: 0.0rem 0 0.25rem 0 !important;
+}
+
+/* Instruction line text (coloured banners) */
+.inst-line {
+  min-height: 2.0rem !important;
+  display: flex !important;
+  align-items: center !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em !important;
+  font-size: 1.68rem !important;  /* 30% smaller than previous 2.4rem */
+  margin: 0.10rem 0 0.10rem 0 !important;
+}
+
+/* Remove border around the drawable canvas (scratch pad) */
+iframe[title^="streamlit_drawable_canvas"],
+iframe[title*="drawable_canvas"],
+iframe[title*="streamlit_drawable_canvas"],
+div[data-testid="stCanvas"] iframe {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -594,7 +619,7 @@ def _instruction_line(slot: str):
 
     with ctext:
         safe_msg = msg if msg else "&nbsp;"
-        st.markdown(f"<div class='inst-line' style='color:{color}; font-weight:900; letter-spacing:0.03em; font-size:1.68rem; line-height:1.1; min-height:1.82rem; display:flex; align-items:center;'>{safe_msg}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='inst-line' style='color:{color};'>{safe_msg}</div>", unsafe_allow_html=True)
 
 
 # ---------------- Canvas ----------------
@@ -621,7 +646,7 @@ def _render_canvas(slot: str):
         stroke_width=stroke_width,
         stroke_color=stroke_color,
         background_color="#000000",
-        height=416,
+        height=728,
         drawing_mode="freedraw",
         key=f"canvas__{slot}",
     )
