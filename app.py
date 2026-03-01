@@ -91,7 +91,7 @@ def _render_scale_css(scale: float) -> None:
 }}
 
 /* Tighten KaTeX vertical margins */
-.katex-display { margin: 0.12em 0 !important; }
+.katex-display {{ margin: 0.12em 0 !important; }}
 
 /* Markdown text (questions, answers, working) */
 div[data-testid="stMarkdownContainer"] p,
@@ -104,9 +104,9 @@ div[data-testid="stMarkdownContainer"] span {{
 }}
 
 /* Tighten markdown vertical spacing */
-div[data-testid="stMarkdownContainer"] p { margin: 0 0 0.12rem 0 !important; }
-div[data-testid="stMarkdownContainer"] ul { margin: 0 0 0.10rem 1.2rem !important; }
-div[data-testid="stMarkdownContainer"] li { margin: 0 0 0.08rem 0 !important; }
+div[data-testid="stMarkdownContainer"] p {{ margin: 0 0 0.12rem 0 !important; }}
+div[data-testid="stMarkdownContainer"] ul {{ margin: 0 0 0.10rem 1.2rem !important; }}
+div[data-testid="stMarkdownContainer"] li {{ margin: 0 0 0.08rem 0 !important; }}
 
 /* Captions + labels */
 div[data-testid="stCaptionContainer"],
@@ -119,107 +119,6 @@ label {{
         unsafe_allow_html=True,
     )
 
-def _scale_controls_row(prefix: str) -> None:
-    """Large, visible controls (not the micro-buttons)."""
-    _set_default("ui_scale", 3.0)
-
-    cols = st.columns([1.2, 1.2, 2.2, 10], gap="small")
-    if cols[0].button("A−", key=f"{prefix}__scale_minus", type="primary"):
-        st.session_state.ui_scale = max(1.4, round(float(st.session_state.ui_scale) - 0.2, 2))
-        st.rerun()
-    if cols[1].button("A+", key=f"{prefix}__scale_plus", type="primary"):
-        st.session_state.ui_scale = min(3.6, round(float(st.session_state.ui_scale) + 0.2, 2))
-        st.rerun()
-    if cols[2].button("Reset", key=f"{prefix}__scale_reset", type="primary"):
-        st.session_state.ui_scale = 3.0
-        st.rerun()
-
-    cols[3].markdown(
-        f"<div style='opacity:0.75; font-size:0.95rem;'>Text size: {float(st.session_state.ui_scale):.1f}×</div>",
-        unsafe_allow_html=True,
-    )
-
-
-# ---------- Callback: shift level ----------
-def _shift_level(topic: str, delta: int, ids: list[str], safe_topic: str) -> None:
-    if not ids:
-        return
-    key_level = f"level__{safe_topic}"
-    cur = st.session_state.get(key_level, ids[0])
-    try:
-        idx = ids.index(cur)
-    except ValueError:
-        idx = 0
-    new_idx = max(0, min(len(ids) - 1, idx + delta))
-    new_level_id = ids[new_idx]
-
-    st.session_state[key_level] = new_level_id
-    if "topics_levels" not in st.session_state or not isinstance(st.session_state.topics_levels, dict):
-        st.session_state.topics_levels = {}
-    st.session_state.topics_levels[topic] = new_level_id
-
-    st.session_state.generated = None
-    st.session_state.pair_params_map = None
-    st.session_state.level_name_map = None
-    st.session_state.pdf_cache = None
-    st.session_state.pdf_fp = None
-
-
-# ---------- CSS ----------
-st.markdown(
-    """
-<style>
-.block-container { padding-top: 3.8rem; }
-
-.topic-title {
-    font-size: 0.78rem;
-    color: #555555;
-    font-weight: 650;
-    margin: 0.0rem 0 0.25rem 0;
-}
-
-button[kind="secondary"] {
-    padding: 0.00rem 0.14rem !important;
-    font-size: 0.52rem !important;
-    line-height: 1 !important;
-    height: 0.92rem !important;
-    min-height: 0.92rem !important;
-    min-width: 1.05rem !important;
-    background: rgba(0,0,0,0.92) !important;
-    color: #555555 !important;
-    border: 1px solid rgba(85,85,85,0.30) !important;
-}
-button[kind="secondary"] * { color: #555555 !important; }
-
-
-
-div[data-testid="stDownloadButton"] button {
-    background: rgba(0,0,0,0.92) !important;
-    color: #FFFFFF !important;
-    border: 1px solid rgba(255,255,255,0.25) !important;
-}
-div[data-testid="stDownloadButton"] button * { color: #FFFFFF !important; }
-
-div[data-testid="stSidebar"] button[kind="primary"] {
-    background: rgba(0,0,0,0.92) !important;
-    color: #FFFFFF !important;
-    border: 1px solid rgba(255,255,255,0.25) !important;
-}
-div[data-testid="column"] > div { gap: 0.22rem; }
-
-.inst-line {
-    min-height: 2.0rem;
-    display: flex;
-    align-items: center;
-    font-weight: 800;
-    letter-spacing: 0.03em;
-    font-size: 1.56rem;
-    margin: 0.10rem 0 0.10rem 0;
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
 
 # Apply initial UI scale (default is large; user can reduce)
 _set_default("ui_scale", 3.0)
