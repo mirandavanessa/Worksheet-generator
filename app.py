@@ -149,20 +149,17 @@ label {{
 
 
 def _scale_controls_row(key_prefix: str) -> None:
-    """Large, visible text-size controls (no tooltips).
-
-    Uses primary buttons so they remain easy to hit on iPad.
-    """
+    """Text-size controls (no tooltips)."""
     _set_default("ui_scale", 3.0)
 
     c1, c2, c3, _ = st.columns([1, 1, 1, 12], gap="small")
-    if c1.button("A−", key=f"{key_prefix}__minus", type="primary"):
+    if c1.button("−", key=f"{key_prefix}__minus", type="secondary"):
         st.session_state.ui_scale = max(0.80, round(float(st.session_state.ui_scale) - 0.20, 2))
         st.rerun()
-    if c2.button("A+", key=f"{key_prefix}__plus", type="primary"):
+    if c2.button("+", key=f"{key_prefix}__plus", type="secondary"):
         st.session_state.ui_scale = min(4.00, round(float(st.session_state.ui_scale) + 0.20, 2))
         st.rerun()
-    if c3.button("Reset", key=f"{key_prefix}__reset", type="primary"):
+    if c3.button("R", key=f"{key_prefix}__reset", type="secondary"):
         st.session_state.ui_scale = 3.0
         st.rerun()
 
@@ -187,7 +184,7 @@ def _inject_overlay_timer():
   style.textContent = `
     #mw-floating-timer{
       position:fixed;
-      top:6.55rem;
+      top: 3.45rem;
       left:50%;
       transform: translateX(-50%);
       z-index:999999;
