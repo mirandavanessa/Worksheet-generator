@@ -26,7 +26,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.2-fontscale-controls"
+BUILD_ID = "v39.3-practice-spacing-no-tooltips"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -90,14 +90,23 @@ def _render_scale_css(scale: float) -> None:
     font-size: {scale:.2f}em !important;
 }}
 
+/* Tighten KaTeX vertical margins */
+.katex-display { margin: 0.12em 0 !important; }
+
 /* Markdown text (questions, answers, working) */
 div[data-testid="stMarkdownContainer"] p,
 div[data-testid="stMarkdownContainer"] li,
 div[data-testid="stMarkdownContainer"] strong,
 div[data-testid="stMarkdownContainer"] span {{
     font-size: {scale:.2f}rem !important;
-    line-height: 1.25 !important;
+    line-height: 1.20 !important;
+    margin: 0 !important;
 }}
+
+/* Tighten markdown vertical spacing */
+div[data-testid="stMarkdownContainer"] p { margin: 0 0 0.12rem 0 !important; }
+div[data-testid="stMarkdownContainer"] ul { margin: 0 0 0.10rem 1.2rem !important; }
+div[data-testid="stMarkdownContainer"] li { margin: 0 0 0.08rem 0 !important; }
 
 /* Captions + labels */
 div[data-testid="stCaptionContainer"],
@@ -115,13 +124,13 @@ def _scale_controls_row(prefix: str) -> None:
     _set_default("ui_scale", 3.0)
 
     cols = st.columns([1.2, 1.2, 2.2, 10], gap="small")
-    if cols[0].button("A−", key=f"{prefix}__scale_minus", help="MW_SCALE_MINUS", type="secondary"):
+    if cols[0].button("A−", key=f"{prefix}__scale_minus", type="primary"):
         st.session_state.ui_scale = max(1.4, round(float(st.session_state.ui_scale) - 0.2, 2))
         st.rerun()
-    if cols[1].button("A+", key=f"{prefix}__scale_plus", help="MW_SCALE_PLUS", type="secondary"):
+    if cols[1].button("A+", key=f"{prefix}__scale_plus", type="primary"):
         st.session_state.ui_scale = min(3.6, round(float(st.session_state.ui_scale) + 0.2, 2))
         st.rerun()
-    if cols[2].button("Reset", key=f"{prefix}__scale_reset", help="MW_SCALE_RESET", type="secondary"):
+    if cols[2].button("Reset", key=f"{prefix}__scale_reset", type="primary"):
         st.session_state.ui_scale = 3.0
         st.rerun()
 
@@ -183,32 +192,6 @@ button[kind="secondary"] {
 button[kind="secondary"] * { color: #555555 !important; }
 
 
-/* Font scale controls should be LARGE (override the micro-button styling) */
-button[title="MW_SCALE_MINUS"],
-button[title="MW_SCALE_PLUS"],
-button[title="MW_SCALE_RESET"],
-button[aria-label="MW_SCALE_MINUS"],
-button[aria-label="MW_SCALE_PLUS"],
-button[aria-label="MW_SCALE_RESET"] {
-    padding: 0.35rem 0.70rem !important;
-    font-size: 1.05rem !important;
-    line-height: 1 !important;
-    height: 2.25rem !important;
-    min-height: 2.25rem !important;
-    min-width: 2.70rem !important;
-    background: rgba(0,0,0,0.92) !important;
-    color: #FFFFFF !important;
-    border: 1px solid rgba(255,255,255,0.35) !important;
-}
-button[title="MW_SCALE_MINUS"] *,
-button[title="MW_SCALE_PLUS"] *,
-button[title="MW_SCALE_RESET"] *,
-button[aria-label="MW_SCALE_MINUS"] *,
-button[aria-label="MW_SCALE_PLUS"] *,
-button[aria-label="MW_SCALE_RESET"] * {
-    color: #FFFFFF !important;
-}
-
 
 div[data-testid="stDownloadButton"] button {
     background: rgba(0,0,0,0.92) !important;
@@ -222,7 +205,7 @@ div[data-testid="stSidebar"] button[kind="primary"] {
     color: #FFFFFF !important;
     border: 1px solid rgba(255,255,255,0.25) !important;
 }
-div[data-testid="column"] > div { gap: 0.35rem; }
+div[data-testid="column"] > div { gap: 0.22rem; }
 
 .inst-line {
     min-height: 2.0rem;
@@ -561,7 +544,7 @@ def _instruction_line(slot: str):
 
     cbtn, ctext = st.columns([1, 20], gap="small")
     with cbtn:
-        if st.button("●", key=f"inst_btn__{slot}", help="Instruction cycle", type="secondary"):
+        if st.button("●", key=f"inst_btn__{slot}", type="secondary"):
             st.session_state[state_key] = (int(st.session_state[state_key]) + 1) % 4
             st.rerun()
 
@@ -614,16 +597,16 @@ def _render_canvas(slot: str):
     )
 
     cW, cP, cG, cE, _ = st.columns([1, 1, 1, 1, 8])
-    if cW.button("W", key=f"inkW__{slot}", help="White ink", type="secondary"):
+    if cW.button("W", key=f"inkW__{slot}", type="secondary"):
         st.session_state[mode_key] = "white"
         st.rerun()
-    if cP.button("P", key=f"inkP__{slot}", help="Purple ink", type="secondary"):
+    if cP.button("P", key=f"inkP__{slot}", type="secondary"):
         st.session_state[mode_key] = "purple"
         st.rerun()
-    if cG.button("G", key=f"inkG__{slot}", help="Green ink", type="secondary"):
+    if cG.button("G", key=f"inkG__{slot}", type="secondary"):
         st.session_state[mode_key] = "green"
         st.rerun()
-    if cE.button("E", key=f"inkE__{slot}", help="Eraser (toggle)", type="secondary"):
+    if cE.button("E", key=f"inkE__{slot}", type="secondary"):
         st.session_state[mode_key] = "white" if st.session_state[mode_key] == "eraser" else "eraser"
         st.rerun()
 
@@ -657,11 +640,11 @@ def _render_practice_mode():
     st.markdown("<div style='height: 1.6rem'></div>", unsafe_allow_html=True)
 
     top = st.columns([1, 1, 8])
-    if top[0].button("←", key="back_main", help="Back", type="secondary"):
+    if top[0].button("←", key="back_main", type="secondary"):
         st.session_state.mode = "main"
         st.rerun()
 
-    if top[1].button("N", key="regen_practice", help="New set of 10", type="secondary"):
+    if top[1].button("N", key="regen_practice", type="secondary"):
         st.session_state.practice_seed = random.randint(1, 10**9)
         st.session_state.practice_questions = None
         for k in list(st.session_state.keys()):
@@ -683,7 +666,7 @@ def _render_practice_mode():
     for row in range(5):
         left_idx = 2 * row
         right_idx = 2 * row + 1
-        colL, colR = st.columns(2, gap="large")
+        colL, colR = st.columns(2, gap="medium")
 
         for target_col, i in [(colL, left_idx), (colR, right_idx)]:
             with target_col:
@@ -699,7 +682,7 @@ def _render_practice_mode():
 
                 cN, cA, cAns = st.columns([1, 1, 10])
 
-                if cN.button("N", key=f"pracN_btn__{i}", help="New version", type="secondary"):
+                if cN.button("N", key=f"pracN_btn__{i}", type="secondary"):
                     new_seed = random.randint(1, 10**9)
                     # Avoid re-generating identical to itself (rare)
                     qs[i] = regenerate_question(topic=topic, template_id=q.template_id, max_difficulty=max_difficulty, new_seed=new_seed)
@@ -707,7 +690,7 @@ def _render_practice_mode():
                     st.session_state[ans_key] = False
                     st.rerun()
 
-                if cA.button("A", key=f"pracA_btn__{i}", help="Show/hide answer", type="secondary"):
+                if cA.button("A", key=f"pracA_btn__{i}", type="secondary"):
                     st.session_state[ans_key] = not st.session_state[ans_key]
                     st.rerun()
 
@@ -716,7 +699,7 @@ def _render_practice_mode():
                 else:
                     cAns.markdown("&nbsp;", unsafe_allow_html=True)
 
-        st.markdown("<div style='height: 1.1rem'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 0.35rem'></div>", unsafe_allow_html=True)
 
 
 # ---------------- Sidebar ----------------
@@ -876,8 +859,8 @@ for topic in ordered_topics:
     h1.markdown(f"<div class='topic-title'>{topic}{(' — ' + cur_level_name) if cur_level_name else ''}</div>", unsafe_allow_html=True)
 
     if ids and len(ids) > 1:
-        h2.button("−", key=f"lvlm__{safe_topic}", help="Previous level", type="secondary", on_click=_shift_level, args=(topic, -1, ids, safe_topic))
-        h3.button("+", key=f"lvlp__{safe_topic}", help="Next level", type="secondary", on_click=_shift_level, args=(topic, +1, ids, safe_topic))
+        h2.button("−", key=f"lvlm__{safe_topic}", type="secondary", on_click=_shift_level, args=(topic, -1, ids, safe_topic))
+        h3.button("+", key=f"lvlp__{safe_topic}", type="secondary", on_click=_shift_level, args=(topic, +1, ids, safe_topic))
 
     show2_key = f"show2__{_slot(topic, 1)}"
     _set_default(show2_key, False)
@@ -918,7 +901,7 @@ for topic in ordered_topics:
             _render_canvas(slot1)
 
         ctrl = st.columns(5)
-        if ctrl[0].button("N", key=f"n__{slot1}", help="New version", type="secondary"):
+        if ctrl[0].button("N", key=f"n__{slot1}", type="secondary"):
             _regen_one(topic, 0, int(max_diff))
             st.session_state[ans1_key] = False
             st.session_state[work1_key] = False
@@ -926,20 +909,20 @@ for topic in ordered_topics:
             st.session_state[f"ink__{slot1}"] = "white"
             st.rerun()
 
-        if ctrl[1].button("A", key=f"a__{slot1}", help="Answer", type="secondary"):
+        if ctrl[1].button("A", key=f"a__{slot1}", type="secondary"):
             _toggle(ans1_key, default=False)
             st.session_state.pdf_cache = None
             st.rerun()
 
-        if ctrl[2].button("W", key=f"w__{slot1}", help="Working", type="secondary"):
+        if ctrl[2].button("W", key=f"w__{slot1}", type="secondary"):
             _toggle(work1_key, default=False)
             st.rerun()
 
-        if ctrl[3].button("D", key=f"d__{slot1}", help="Draw", type="secondary"):
+        if ctrl[3].button("D", key=f"d__{slot1}", type="secondary"):
             _toggle(draw1_key, default=False)
             st.rerun()
 
-        if ctrl[4].button("I", key=f"i__{slot1}", help="10-question practice page", type="secondary"):
+        if ctrl[4].button("I", key=f"i__{slot1}", type="secondary"):
             _enter_practice(topic=topic, template_id=q1.template_id, max_difficulty=int(max_diff))
 
     # Q2
@@ -980,7 +963,7 @@ for topic in ordered_topics:
 
         if st.session_state.get(show2_key, False):
             ctrl = st.columns(6)
-            if ctrl[0].button("N", key=f"n__{slot2}", help="New version", type="secondary"):
+            if ctrl[0].button("N", key=f"n__{slot2}", type="secondary"):
                 _regen_one(topic, 1, int(max_diff))
                 st.session_state[ans2_key] = False
                 st.session_state[work2_key] = False
@@ -988,27 +971,27 @@ for topic in ordered_topics:
                 st.session_state[f"ink__{slot2}"] = "white"
                 st.rerun()
 
-            if ctrl[1].button("A", key=f"a__{slot2}", help="Answer", type="secondary"):
+            if ctrl[1].button("A", key=f"a__{slot2}", type="secondary"):
                 _toggle(ans2_key, default=False)
                 st.rerun()
 
-            if ctrl[2].button("W", key=f"w__{slot2}", help="Working", type="secondary"):
+            if ctrl[2].button("W", key=f"w__{slot2}", type="secondary"):
                 _toggle(work2_key, default=False)
                 st.rerun()
 
-            if ctrl[3].button("D", key=f"d__{slot2}", help="Draw", type="secondary"):
+            if ctrl[3].button("D", key=f"d__{slot2}", type="secondary"):
                 _toggle(draw2_key, default=False)
                 st.rerun()
 
-            if ctrl[4].button("I", key=f"i__{slot2}", help="10-question practice page", type="secondary"):
+            if ctrl[4].button("I", key=f"i__{slot2}", type="secondary"):
                 _enter_practice(topic=topic, template_id=q2.template_id, max_difficulty=int(max_diff))
 
-            if ctrl[5].button("H", key=f"h__{slot2}", help="Hide/show Q2", type="secondary"):
+            if ctrl[5].button("H", key=f"h__{slot2}", type="secondary"):
                 st.session_state[show2_key] = not st.session_state.get(show2_key, False)
                 st.rerun()
         else:
             ctrl = st.columns([1, 1, 1, 1, 1, 1])
-            if ctrl[5].button("H", key=f"h__{slot2}", help="Hide/show Q2", type="secondary"):
+            if ctrl[5].button("H", key=f"h__{slot2}", type="secondary"):
                 st.session_state[show2_key] = True
                 st.rerun()
 
