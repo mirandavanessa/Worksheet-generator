@@ -26,7 +26,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.1-black-diagrams-unique-pairs"
+BUILD_ID = "v39.2-fontscale-controls"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -77,6 +77,59 @@ def _pretty_text(s: str) -> str:
          .replace("m^2", "m²")
          .replace("m^3", "m³")
     )
+
+
+# ---------- UI scale (font size) ----------
+def _render_scale_css(scale: float) -> None:
+    """Scale question text + maths for readability (iPad-first)."""
+    st.markdown(
+        f"""
+<style>
+/* Maths (KaTeX) */
+.katex, .katex-display > .katex {{
+    font-size: {scale:.2f}em !important;
+}}
+
+/* Markdown text (questions, answers, working) */
+div[data-testid="stMarkdownContainer"] p,
+div[data-testid="stMarkdownContainer"] li,
+div[data-testid="stMarkdownContainer"] strong,
+div[data-testid="stMarkdownContainer"] span {{
+    font-size: {scale:.2f}rem !important;
+    line-height: 1.25 !important;
+}}
+
+/* Captions + labels */
+div[data-testid="stCaptionContainer"],
+.stCaption,
+label {{
+    font-size: {0.85*scale:.2f}rem !important;
+}}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+def _scale_controls_row(prefix: str) -> None:
+    """Large, visible controls (not the micro-buttons)."""
+    _set_default("ui_scale", 3.0)
+
+    cols = st.columns([1.2, 1.2, 2.2, 10], gap="small")
+    if cols[0].button("A−", key=f"{prefix}__scale_minus", help="MW_SCALE_MINUS", type="secondary"):
+        st.session_state.ui_scale = max(1.4, round(float(st.session_state.ui_scale) - 0.2, 2))
+        st.rerun()
+    if cols[1].button("A+", key=f"{prefix}__scale_plus", help="MW_SCALE_PLUS", type="secondary"):
+        st.session_state.ui_scale = min(3.6, round(float(st.session_state.ui_scale) + 0.2, 2))
+        st.rerun()
+    if cols[2].button("Reset", key=f"{prefix}__scale_reset", help="MW_SCALE_RESET", type="secondary"):
+        st.session_state.ui_scale = 3.0
+        st.rerun()
+
+    cols[3].markdown(
+        f"<div style='opacity:0.75; font-size:0.95rem;'>Text size: {float(st.session_state.ui_scale):.1f}×</div>",
+        unsafe_allow_html=True,
+    )
+
 
 # ---------- Callback: shift level ----------
 def _shift_level(topic: str, delta: int, ids: list[str], safe_topic: str) -> None:
@@ -129,6 +182,34 @@ button[kind="secondary"] {
 }
 button[kind="secondary"] * { color: #555555 !important; }
 
+
+/* Font scale controls should be LARGE (override the micro-button styling) */
+button[title="MW_SCALE_MINUS"],
+button[title="MW_SCALE_PLUS"],
+button[title="MW_SCALE_RESET"],
+button[aria-label="MW_SCALE_MINUS"],
+button[aria-label="MW_SCALE_PLUS"],
+button[aria-label="MW_SCALE_RESET"] {
+    padding: 0.35rem 0.70rem !important;
+    font-size: 1.05rem !important;
+    line-height: 1 !important;
+    height: 2.25rem !important;
+    min-height: 2.25rem !important;
+    min-width: 2.70rem !important;
+    background: rgba(0,0,0,0.92) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255,255,255,0.35) !important;
+}
+button[title="MW_SCALE_MINUS"] *,
+button[title="MW_SCALE_PLUS"] *,
+button[title="MW_SCALE_RESET"] *,
+button[aria-label="MW_SCALE_MINUS"] *,
+button[aria-label="MW_SCALE_PLUS"] *,
+button[aria-label="MW_SCALE_RESET"] * {
+    color: #FFFFFF !important;
+}
+
+
 div[data-testid="stDownloadButton"] button {
     background: rgba(0,0,0,0.92) !important;
     color: #FFFFFF !important;
@@ -156,6 +237,10 @@ div[data-testid="column"] > div { gap: 0.35rem; }
 """,
     unsafe_allow_html=True,
 )
+
+# Apply initial UI scale (default is large; user can reduce)
+_set_default("ui_scale", 3.0)
+_render_scale_css(float(st.session_state.ui_scale))
 
 
 # ---------- Floating overlay timer + centre line (JS injection) ----------
@@ -584,6 +669,9 @@ def _render_practice_mode():
                 del st.session_state[k]
         st.rerun()
 
+    # Text size controls
+    _scale_controls_row("practice_top")
+
     st.markdown(f"<div class='topic-title'>{topic}</div>", unsafe_allow_html=True)
 
     if st.session_state.get("practice_questions") is None:
@@ -717,6 +805,10 @@ topics_levels = st.session_state.get("topics_levels", {})
 if not topics_levels:
     st.warning("Pick at least one topic in the sidebar.")
     st.stop()
+
+# Text size controls
+_scale_controls_row("main_top")
+_render_scale_css(float(st.session_state.ui_scale))
 
 seed = int(st.session_state.master_seed)
 
