@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import random
 import html
+import json
+import base64
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -29,12 +31,108 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.16-strand-topic-selection"
+BUILD_ID = "v39.17-persist-strand-topic-selection"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
 except Exception as _e:
     print("TOPIC_LOAD_ERROR", _e)
+
+
+# ---------- Persist sidebar selection in the URL (survives refresh on iPad) ----------
+# We store the last-used selection (topics/strand/max_diff/levels) as a compact base64 JSON
+# in the query string (param: sel). This prevents the app from reverting to Defaults
+# after a browser refresh.
+
+
+def _encode_sel_state(obj: dict) -> str:
+    raw = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_sel_state(s: str) -> dict:
+    pad = "=" * ((4 - (len(s) % 4)) % 4)
+    raw = base64.urlsafe_b64decode((s + pad).encode("ascii"))
+    return json.loads(raw.decode("utf-8"))
+
+
+def _qp_get(key: str):
+    try:
+        v = st.query_params.get(key)
+        if isinstance(v, list):
+            return v[0] if v else None
+        return v
+    except Exception:
+        try:
+            q = st.experimental_get_query_params()
+            return (q.get(key) or [None])[0]
+        except Exception:
+            return None
+
+
+def _qp_set(**kwargs):
+    try:
+        for k, v in kwargs.items():
+            st.query_params[k] = v
+    except Exception:
+        try:
+            st.experimental_set_query_params(**kwargs)
+        except Exception:
+            pass
+
+
+def _load_selection_from_query_params(all_topics: list[str], all_strands: list[str]) -> bool:
+    raw = _qp_get("sel")
+    if not raw:
+        return False
+    try:
+        data = _decode_sel_state(str(raw))
+    except Exception:
+        return False
+
+    topics = data.get("topics", [])
+    if not isinstance(topics, list):
+        topics = []
+    topics = [t for t in topics if isinstance(t, str) and t in all_topics]
+    topics = sorted(topics, key=lambda x: all_topics.index(x))
+    st.session_state["topics_select"] = topics
+
+    strand = data.get("strand")
+    if isinstance(strand, str) and strand in all_strands:
+        st.session_state["strand_select"] = strand
+
+    md = data.get("max_diff")
+    if isinstance(md, int) and 1 <= md <= 5:
+        st.session_state["max_diff"] = md
+
+    levels = data.get("levels", {})
+    if isinstance(levels, dict):
+        for t, lvl in levels.items():
+            if isinstance(t, str) and t in all_topics and isinstance(lvl, str):
+                st.session_state[f"level__{_safe_topic_key(t)}"] = lvl
+
+    return True
+
+
+def _save_selection_to_query_params(topics: list[str], strand: str, max_diff: int, topics_levels: dict[str, str], all_topics: list[str]):
+    topics = [t for t in topics if t in all_topics]
+    topics = sorted(topics, key=lambda x: all_topics.index(x))
+
+    payload = {
+        "topics": topics,
+        "strand": strand,
+        "max_diff": int(max_diff),
+        "levels": {t: topics_levels.get(t, "") for t in topics if topics_levels.get(t)},
+    }
+    enc = _encode_sel_state(payload)
+
+    cur = _qp_get("sel")
+    if (cur == enc) or (st.session_state.get("__last_sel_qp") == enc):
+        return
+
+    _qp_set(sel=enc)
+    st.session_state["__last_sel_qp"] = enc
+
 
 
 # ---------- Global UI CSS (keep action buttons small + dark grey; not affected by text scaling) ----------
@@ -783,7 +881,10 @@ with st.sidebar:
         st.session_state["topics_select"] = sorted(new_list, key=lambda x: _all_topics.index(x))
 
     if "topics_select" not in st.session_state:
-        _set_topics([t for t in DEFAULT_TOPICS if t in _all_topics])
+        # Try to restore from URL first (survives refresh).
+        loaded = _load_selection_from_query_params(_all_topics, _all_strands)
+        if not loaded:
+            _set_topics([t for t in DEFAULT_TOPICS if t in _all_topics])
 
     # Strand-first browsing (scales as the topic bank grows)
     if "strand_select" not in st.session_state:
@@ -813,7 +914,10 @@ with st.sidebar:
     topics = st.multiselect("Topics", options=topic_options, key="topics_select")
     st.caption("Type to search. Switch Strand to filter the list.")
 
-    max_diff = st.slider("Max difficulty", 1, 5, 5)
+    if "max_diff" not in st.session_state:
+        st.session_state["max_diff"] = 5
+
+    max_diff = st.slider("Max difficulty", 1, 5, value=int(st.session_state.get("max_diff", 5)), key="max_diff")
 
     st.subheader("Levels")
     topics_levels: dict[str, str] = {}
@@ -835,6 +939,8 @@ with st.sidebar:
         )
 
     st.session_state.topics_levels = topics_levels
+    _save_selection_to_query_params(topics=topics, strand=strand, max_diff=int(max_diff), topics_levels=topics_levels, all_topics=_all_topics)
+
 
     if "master_seed" not in st.session_state:
         st.session_state.master_seed = random.randint(1, 10**9)
