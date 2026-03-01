@@ -26,7 +26,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.3-practice-spacing-no-tooltips"
+BUILD_ID = "v39.5-scale-controls-fix"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -118,6 +118,25 @@ label {{
 """,
         unsafe_allow_html=True,
     )
+
+
+def _scale_controls_row(key_prefix: str) -> None:
+    """Large, visible text-size controls (no tooltips).
+
+    Uses primary buttons so they remain easy to hit on iPad.
+    """
+    _set_default("ui_scale", 3.0)
+
+    c1, c2, c3, _ = st.columns([1, 1, 1, 12], gap="small")
+    if c1.button("A−", key=f"{key_prefix}__minus", type="primary"):
+        st.session_state.ui_scale = max(0.80, round(float(st.session_state.ui_scale) - 0.20, 2))
+        st.rerun()
+    if c2.button("A+", key=f"{key_prefix}__plus", type="primary"):
+        st.session_state.ui_scale = min(4.00, round(float(st.session_state.ui_scale) + 0.20, 2))
+        st.rerun()
+    if c3.button("Reset", key=f"{key_prefix}__reset", type="primary"):
+        st.session_state.ui_scale = 3.0
+        st.rerun()
 
 
 # Apply initial UI scale (default is large; user can reduce)
