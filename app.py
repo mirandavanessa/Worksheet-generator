@@ -31,7 +31,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.17-persist-strand-topic-selection"
+BUILD_ID = "v39.18-presets-sidebar-font"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -134,6 +134,40 @@ def _save_selection_to_query_params(topics: list[str], strand: str, max_diff: in
     st.session_state["__last_sel_qp"] = enc
 
 
+# ---------- Presets (stored in URL query params: presets=...) ----------
+# Stores multiple named selections without requiring accounts.
+
+
+def _load_presets_from_query_params() -> dict:
+    raw = _qp_get("presets")
+    if not raw:
+        return {}
+    try:
+        data = _decode_sel_state(str(raw))
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    # Expected: {name: {topics:[...], strand:"...", max_diff:int, levels:{...}}}
+    out: dict = {}
+    for k, v in data.items():
+        if isinstance(k, str) and isinstance(v, dict):
+            out[k] = v
+    return out
+
+
+def _save_presets_to_query_params(presets: dict) -> None:
+    try:
+        enc = _encode_sel_state(presets)
+    except Exception:
+        return
+    cur = _qp_get("presets")
+    if (cur == enc) or (st.session_state.get("__last_presets_qp") == enc):
+        return
+    _qp_set(presets=enc)
+    st.session_state["__last_presets_qp"] = enc
+
+
 
 # ---------- Global UI CSS (keep action buttons small + dark grey; not affected by text scaling) ----------
 st.markdown(
@@ -211,6 +245,22 @@ div[data-testid="stSidebar"] button[data-testid="baseButton-primary"] {
   padding: 6px 12px !important;
 }
 div[data-testid="stSidebar"] button[kind="primary"] * { color: #FFFFFF !important; }
+
+/* Sidebar typography: reduce headings/labels/captions (not the dropdown list itself) */
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2 {
+  font-size: 1.05rem !important;
+}
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] h4 {
+  font-size: 0.90rem !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] p,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"],
+section[data-testid="stSidebar"] .stCaption {
+  font-size: 0.85rem !important;
+}
 
 /* Topic title styling (small + dark grey) */
 .topic-title {
@@ -331,33 +381,35 @@ def _render_scale_css(scale: float) -> None:
     st.markdown(
         f"""
 <style>
+/* Apply scaling ONLY to the main page content (not the sidebar / buttons) */
+
 /* Maths (KaTeX) */
-.katex, .katex-display > .katex {{
+section.main .katex, section.main .katex-display > .katex {{
     font-size: {scale:.2f}em !important;
 }}
 
 /* Tighten KaTeX vertical margins */
-.katex-display {{ margin: 0.12em 0 !important; }}
+section.main .katex-display {{ margin: 0.12em 0 !important; }}
 
 /* Markdown text (questions, answers, working) */
-div[data-testid="stMarkdownContainer"] p,
-div[data-testid="stMarkdownContainer"] li,
-div[data-testid="stMarkdownContainer"] strong,
-div[data-testid="stMarkdownContainer"] span {{
+section.main div[data-testid="stMarkdownContainer"] p,
+section.main div[data-testid="stMarkdownContainer"] li,
+section.main div[data-testid="stMarkdownContainer"] strong,
+section.main div[data-testid="stMarkdownContainer"] span {{
     font-size: {scale:.2f}rem !important;
     line-height: 1.20 !important;
     margin: 0 !important;
 }}
 
 /* Tighten markdown vertical spacing */
-div[data-testid="stMarkdownContainer"] p {{ margin: 0 0 0.12rem 0 !important; }}
-div[data-testid="stMarkdownContainer"] ul {{ margin: 0 0 0.10rem 1.2rem !important; }}
-div[data-testid="stMarkdownContainer"] li {{ margin: 0 0 0.08rem 0 !important; }}
+section.main div[data-testid="stMarkdownContainer"] p {{ margin: 0 0 0.12rem 0 !important; }}
+section.main div[data-testid="stMarkdownContainer"] ul {{ margin: 0 0 0.10rem 1.2rem !important; }}
+section.main div[data-testid="stMarkdownContainer"] li {{ margin: 0 0 0.08rem 0 !important; }}
 
 /* Captions + labels */
-div[data-testid="stCaptionContainer"],
-.stCaption,
-label {{
+section.main div[data-testid="stCaptionContainer"],
+section.main .stCaption,
+section.main label {{
     font-size: {0.85*scale:.2f}rem !important;
 }}
 </style>
@@ -875,6 +927,10 @@ with st.sidebar:
     _all_topics = available_topics()
     _all_strands = available_strands()
 
+    # Load presets (persisted in URL) once
+    if "saved_presets" not in st.session_state:
+        st.session_state["saved_presets"] = _load_presets_from_query_params()
+
     def _set_topics(new_list: list[str]):
         # keep ordering consistent with available_topics()
         new_list = [t for t in new_list if t in _all_topics]
@@ -885,6 +941,66 @@ with st.sidebar:
         loaded = _load_selection_from_query_params(_all_topics, _all_strands)
         if not loaded:
             _set_topics([t for t in DEFAULT_TOPICS if t in _all_topics])
+
+    # ---- Presets (save/load/delete) ----
+    st.subheader("Presets")
+    presets: dict = st.session_state.get("saved_presets", {}) or {}
+    preset_names = ["(none)"] + sorted([k for k in presets.keys() if isinstance(k, str)], key=str.lower)
+    preset_pick = st.selectbox("Preset", options=preset_names, key="preset_pick")
+    preset_name = st.text_input("Name", key="preset_name", placeholder="e.g. Y9 Algebra")
+
+    p1, p2, p3 = st.columns(3)
+    if p1.button("Save", use_container_width=True):
+        name = (preset_name or "").strip() or (preset_pick if preset_pick != "(none)" else "")
+        if name:
+            cur_topics = list(st.session_state.get("topics_select", []))
+            cur_strand = str(st.session_state.get("strand_select", "All"))
+            cur_md = int(st.session_state.get("max_diff", 5))
+            cur_levels = {t: st.session_state.get(f"level__{_safe_topic_key(t)}", "") for t in cur_topics}
+            presets[name] = {"topics": cur_topics, "strand": cur_strand, "max_diff": cur_md, "levels": cur_levels}
+            st.session_state["saved_presets"] = presets
+            _save_presets_to_query_params(presets)
+            st.session_state["preset_pick"] = name
+            st.session_state["preset_name"] = ""
+            st.rerun()
+
+    if p2.button("Load", use_container_width=True):
+        if preset_pick in presets:
+            data = presets[preset_pick]
+            # Apply the preset to current session state
+            try:
+                topics = data.get("topics", []) if isinstance(data, dict) else []
+                if not isinstance(topics, list):
+                    topics = []
+                topics = [t for t in topics if isinstance(t, str) and t in _all_topics]
+                _set_topics(topics)
+
+                strand2 = data.get("strand") if isinstance(data, dict) else None
+                if isinstance(strand2, str) and strand2 in _all_strands:
+                    st.session_state["strand_select"] = strand2
+
+                md2 = data.get("max_diff") if isinstance(data, dict) else None
+                if isinstance(md2, int) and 1 <= md2 <= 5:
+                    st.session_state["max_diff"] = md2
+
+                levels2 = data.get("levels", {}) if isinstance(data, dict) else {}
+                if isinstance(levels2, dict):
+                    for t, lvl in levels2.items():
+                        if isinstance(t, str) and t in _all_topics and isinstance(lvl, str) and lvl:
+                            st.session_state[f"level__{_safe_topic_key(t)}"] = lvl
+            except Exception:
+                pass
+            st.rerun()
+
+    if p3.button("Delete", use_container_width=True):
+        if preset_pick in presets:
+            presets.pop(preset_pick, None)
+            st.session_state["saved_presets"] = presets
+            _save_presets_to_query_params(presets)
+            st.session_state["preset_pick"] = "(none)"
+            st.rerun()
+
+    st.divider()
 
     # Strand-first browsing (scales as the topic bank grows)
     if "strand_select" not in st.session_state:
@@ -910,6 +1026,12 @@ with st.sidebar:
     cur_sel = list(st.session_state.get("topics_select", []))
     allowed = set(strand_topics) | set(cur_sel)
     topic_options = [t for t in _all_topics if t in allowed]
+
+    # Optional quick filter (useful once the bank grows)
+    topic_search = st.text_input("Search", key="topic_search", placeholder="Type to filter topics")
+    if topic_search and topic_search.strip():
+        s = topic_search.strip().lower()
+        topic_options = [t for t in topic_options if (s in t.lower()) or (t in cur_sel)]
 
     topics = st.multiselect("Topics", options=topic_options, key="topics_select")
     st.caption("Type to search. Switch Strand to filter the list.")
