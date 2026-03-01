@@ -26,7 +26,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.8-action-buttons-fixed"
+BUILD_ID = "v39.9-action-buttons-not-scaled"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -41,23 +41,50 @@ st.markdown(
 /* Slight top padding so controls aren't hidden behind Streamlit header */
 .block-container { padding-top: 3.4rem; }
 
-/* Action buttons (N/A/W/D/I/H etc + font size controls): keep tiny + dark grey */
+/* Action buttons (N/A/W/D/I/H etc + font size controls): keep tiny + dark grey.
+   IMPORTANT: Streamlit renders button labels using a nested stMarkdownContainer,
+   so we must override that too; otherwise the global text-scaling CSS will enlarge them.
+*/
 button[kind="secondary"],
-button[data-testid="baseButton-secondary"] {
-  padding: 0.02rem 0.18rem !important;
-  font-size: 0.62rem !important;   /* fixed size (not scaled) */
+button[data-testid="baseButton-secondary"],
+div[data-testid="stButton"] > button,
+div.stButton > button {
+  padding: 0px 4px !important;
+  font-size: 11px !important;     /* fixed size */
   line-height: 1 !important;
-  height: 1.05rem !important;
-  min-height: 1.05rem !important;
-  min-width: 1.15rem !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  min-width: 22px !important;
   background: rgba(0,0,0,0.92) !important;
   color: #555555 !important;
   border: 1px solid rgba(85,85,85,0.30) !important;
-  border-radius: 0.35rem !important;
+  border-radius: 6px !important;
 }
 
 button[kind="secondary"] *,
-button[data-testid="baseButton-secondary"] * {
+button[data-testid="baseButton-secondary"] *,
+div[data-testid="stButton"] > button *,
+div.stButton > button * {
+  color: #555555 !important;
+}
+
+/* Force button-label typography to stay fixed (Streamlit uses stMarkdownContainer inside buttons) */
+button[kind="secondary"] div[data-testid="stMarkdownContainer"] p,
+button[kind="secondary"] div[data-testid="stMarkdownContainer"] span,
+button[kind="secondary"] div[data-testid="stMarkdownContainer"] strong,
+button[data-testid="baseButton-secondary"] div[data-testid="stMarkdownContainer"] p,
+button[data-testid="baseButton-secondary"] div[data-testid="stMarkdownContainer"] span,
+button[data-testid="baseButton-secondary"] div[data-testid="stMarkdownContainer"] strong,
+div[data-testid="stButton"] > button div[data-testid="stMarkdownContainer"] p,
+div[data-testid="stButton"] > button div[data-testid="stMarkdownContainer"] span,
+div[data-testid="stButton"] > button div[data-testid="stMarkdownContainer"] strong,
+div.stButton > button div[data-testid="stMarkdownContainer"] p,
+div.stButton > button div[data-testid="stMarkdownContainer"] span,
+div.stButton > button div[data-testid="stMarkdownContainer"] strong {
+  font-size: 11px !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
   color: #555555 !important;
 }
 
@@ -66,14 +93,21 @@ div[data-testid="stDownloadButton"] button {
   background: rgba(0,0,0,0.92) !important;
   color: #FFFFFF !important;
   border: 1px solid rgba(255,255,255,0.25) !important;
+  font-size: 14px !important;
+  height: auto !important;
+  padding: 6px 12px !important;
 }
 div[data-testid="stDownloadButton"] button * { color: #FFFFFF !important; }
 
 /* Sidebar primary button (Regenerate ALL) readable */
-div[data-testid="stSidebar"] button[kind="primary"] {
+div[data-testid="stSidebar"] button[kind="primary"],
+div[data-testid="stSidebar"] button[data-testid="baseButton-primary"] {
   background: rgba(0,0,0,0.92) !important;
   color: #FFFFFF !important;
   border: 1px solid rgba(255,255,255,0.25) !important;
+  font-size: 14px !important;
+  height: auto !important;
+  padding: 6px 12px !important;
 }
 div[data-testid="stSidebar"] button[kind="primary"] * { color: #FFFFFF !important; }
 </style>
