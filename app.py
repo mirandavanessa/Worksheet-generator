@@ -589,7 +589,7 @@ def _instruction_line(slot: str):
 
     with ctext:
         safe_msg = msg if msg else "&nbsp;"
-        st.markdown(f"<div class='inst-line' style='color:{color};'>{safe_msg}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='inst-line' style='color:{color}; font-weight:900; letter-spacing:0.03em; font-size:2.4rem; line-height:1.1; min-height:2.6rem; display:flex; align-items:center;'>{safe_msg}</div>", unsafe_allow_html=True)
 
 
 # ---------------- Canvas ----------------
