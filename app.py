@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import random
+import html
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -119,6 +120,11 @@ div[data-testid="stSidebar"] button[kind="primary"] * { color: #FFFFFF !importan
   margin: 0.0rem 0 0.25rem 0 !important;
 }
 
+/* Practice page: question number colour */
+.prac-num {
+  color: #7fbfff !important;  /* light blue */
+  font-weight: 800 !important;
+}
 /* Instruction line text (coloured banners) */
 .inst-line {
   min-height: 2.0rem !important;
@@ -593,7 +599,7 @@ _inject_overlay_timer()
 
 
 # ---------------- Instruction line (cycle) ----------------
-def _instruction_line(slot: str, *, align: str = "left"):
+def _instruction_line(slot: str, align: str = "left"):
     state_key = f"inst_state__{slot}"
     _set_default(state_key, 0)
 
@@ -619,15 +625,9 @@ def _instruction_line(slot: str, *, align: str = "left"):
 
     with ctext:
         safe_msg = msg if msg else "&nbsp;"
-
-        # Left question: left aligned. Right question: right aligned.
-        if align == "right":
-            extra = "justify-content:flex-end;text-align:right;"
-        else:
-            extra = "justify-content:flex-start;text-align:left;"
-
+        justify = 'flex-end' if align == 'right' else 'flex-start'
         st.markdown(
-            f"<div class='inst-line' style='color:{color};{extra}'>{safe_msg}</div>",
+            f"<div class='inst-line' style='color:{color}; justify-content:{justify}; text-align:{align}; width:100%;'>{safe_msg}</div>",
             unsafe_allow_html=True,
         )
 
@@ -736,7 +736,8 @@ def _render_practice_mode():
         for target_col, i in [(colL, left_idx), (colR, right_idx)]:
             with target_col:
                 q = qs[i]
-                st.markdown(f"**{i+1}. {_pretty_text(q.prompt)}**")
+                prompt_txt = html.escape(_pretty_text(q.prompt))
+                st.markdown(f"<p><span class='prac-num'>{i+1}.</span> <strong>{prompt_txt}</strong></p>", unsafe_allow_html=True)
                 if q.latex.strip():
                     st.latex(q.latex)
                 if getattr(q, "diagram_png", None):
