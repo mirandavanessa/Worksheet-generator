@@ -31,7 +31,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.18-presets-sidebar-font"
+BUILD_ID = "v39.19-presets-fix-scale"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -381,42 +381,55 @@ def _render_scale_css(scale: float) -> None:
     st.markdown(
         f"""
 <style>
-/* Apply scaling ONLY to the main page content (not the sidebar / buttons) */
-
 /* Maths (KaTeX) */
-section.main .katex, section.main .katex-display > .katex {{
+.katex, .katex-display > .katex {{
     font-size: {scale:.2f}em !important;
 }}
 
 /* Tighten KaTeX vertical margins */
-section.main .katex-display {{ margin: 0.12em 0 !important; }}
+.katex-display {{ margin: 0.12em 0 !important; }}
 
 /* Markdown text (questions, answers, working) */
-section.main div[data-testid="stMarkdownContainer"] p,
-section.main div[data-testid="stMarkdownContainer"] li,
-section.main div[data-testid="stMarkdownContainer"] strong,
-section.main div[data-testid="stMarkdownContainer"] span {{
+div[data-testid="stMarkdownContainer"] p,
+div[data-testid="stMarkdownContainer"] li,
+div[data-testid="stMarkdownContainer"] strong,
+div[data-testid="stMarkdownContainer"] span {{
     font-size: {scale:.2f}rem !important;
     line-height: 1.20 !important;
     margin: 0 !important;
 }}
 
 /* Tighten markdown vertical spacing */
-section.main div[data-testid="stMarkdownContainer"] p {{ margin: 0 0 0.12rem 0 !important; }}
-section.main div[data-testid="stMarkdownContainer"] ul {{ margin: 0 0 0.10rem 1.2rem !important; }}
-section.main div[data-testid="stMarkdownContainer"] li {{ margin: 0 0 0.08rem 0 !important; }}
+div[data-testid="stMarkdownContainer"] p {{ margin: 0 0 0.12rem 0 !important; }}
+div[data-testid="stMarkdownContainer"] ul {{ margin: 0 0 0.10rem 1.2rem !important; }}
+div[data-testid="stMarkdownContainer"] li {{ margin: 0 0 0.08rem 0 !important; }}
 
 /* Captions + labels */
-section.main div[data-testid="stCaptionContainer"],
-section.main .stCaption,
-section.main label {{
+div[data-testid="stCaptionContainer"],
+.stCaption,
+label {{
     font-size: {0.85*scale:.2f}rem !important;
+}}
+
+/* Re-apply sidebar typography reduction AFTER scale injection */
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2 {{
+  font-size: 1.05rem !important;
+}}
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] h4 {{
+  font-size: 0.90rem !important;
+}}
+section[data-testid="stSidebar"] div[data-testid="stMarkdownContainer"] p,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"],
+section[data-testid="stSidebar"] .stCaption {{
+  font-size: 0.85rem !important;
 }}
 </style>
 """,
         unsafe_allow_html=True,
     )
-
 
 def _scale_controls_row(key_prefix: str) -> None:
     """Text-size controls (no tooltips)."""
@@ -946,6 +959,12 @@ with st.sidebar:
     st.subheader("Presets")
     presets: dict = st.session_state.get("saved_presets", {}) or {}
     preset_names = ["(none)"] + sorted([k for k in presets.keys() if isinstance(k, str)], key=str.lower)
+    # Apply any pending preset UI changes BEFORE widgets are created (avoids StreamlitAPIException)
+    pending_pick = st.session_state.pop("preset_pick_pending", None)
+    if pending_pick is not None:
+        st.session_state["preset_pick"] = pending_pick if pending_pick in preset_names else "(none)"
+    if st.session_state.pop("preset_name_pending_clear", False):
+        st.session_state["preset_name"] = ""
     preset_pick = st.selectbox("Preset", options=preset_names, key="preset_pick")
     preset_name = st.text_input("Name", key="preset_name", placeholder="e.g. Y9 Algebra")
 
@@ -960,8 +979,8 @@ with st.sidebar:
             presets[name] = {"topics": cur_topics, "strand": cur_strand, "max_diff": cur_md, "levels": cur_levels}
             st.session_state["saved_presets"] = presets
             _save_presets_to_query_params(presets)
-            st.session_state["preset_pick"] = name
-            st.session_state["preset_name"] = ""
+            st.session_state["preset_pick_pending"] = name
+            st.session_state["preset_name_pending_clear"] = True
             st.rerun()
 
     if p2.button("Load", use_container_width=True):
@@ -997,7 +1016,7 @@ with st.sidebar:
             presets.pop(preset_pick, None)
             st.session_state["saved_presets"] = presets
             _save_presets_to_query_params(presets)
-            st.session_state["preset_pick"] = "(none)"
+            st.session_state["preset_pick_pending"] = "(none)"
             st.rerun()
 
     st.divider()
