@@ -26,12 +26,60 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.5-scale-controls-fix"
+BUILD_ID = "v39.8-action-buttons-fixed"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
 except Exception as _e:
     print("TOPIC_LOAD_ERROR", _e)
+
+
+# ---------- Global UI CSS (keep action buttons small + dark grey; not affected by text scaling) ----------
+st.markdown(
+    r"""
+<style>
+/* Slight top padding so controls aren't hidden behind Streamlit header */
+.block-container { padding-top: 3.4rem; }
+
+/* Action buttons (N/A/W/D/I/H etc + font size controls): keep tiny + dark grey */
+button[kind="secondary"],
+button[data-testid="baseButton-secondary"] {
+  padding: 0.02rem 0.18rem !important;
+  font-size: 0.62rem !important;   /* fixed size (not scaled) */
+  line-height: 1 !important;
+  height: 1.05rem !important;
+  min-height: 1.05rem !important;
+  min-width: 1.15rem !important;
+  background: rgba(0,0,0,0.92) !important;
+  color: #555555 !important;
+  border: 1px solid rgba(85,85,85,0.30) !important;
+  border-radius: 0.35rem !important;
+}
+
+button[kind="secondary"] *,
+button[data-testid="baseButton-secondary"] * {
+  color: #555555 !important;
+}
+
+/* Keep download button readable */
+div[data-testid="stDownloadButton"] button {
+  background: rgba(0,0,0,0.92) !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(255,255,255,0.25) !important;
+}
+div[data-testid="stDownloadButton"] button * { color: #FFFFFF !important; }
+
+/* Sidebar primary button (Regenerate ALL) readable */
+div[data-testid="stSidebar"] button[kind="primary"] {
+  background: rgba(0,0,0,0.92) !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(255,255,255,0.25) !important;
+}
+div[data-testid="stSidebar"] button[kind="primary"] * { color: #FFFFFF !important; }
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ---------- Helpers ----------
