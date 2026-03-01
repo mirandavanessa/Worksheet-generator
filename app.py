@@ -62,6 +62,34 @@ def _set_default(key: str, default):
     if key not in st.session_state:
         st.session_state[key] = default
 
+
+# ---------- Callbacks ----------
+def _shift_level(topic: str, delta: int, ids: list[str], safe_topic: str) -> None:
+    """Shift the selected level for a topic (main-page − / + buttons)."""
+    if not ids:
+        return
+    key_level = f"level__{safe_topic}"
+    cur = st.session_state.get(key_level, ids[0])
+    try:
+        idx = ids.index(cur)
+    except ValueError:
+        idx = 0
+    new_idx = max(0, min(len(ids) - 1, idx + int(delta)))
+    new_level_id = ids[new_idx]
+
+    # Update widget-backed state
+    st.session_state[key_level] = new_level_id
+    if 'topics_levels' not in st.session_state or not isinstance(st.session_state.get('topics_levels'), dict):
+        st.session_state.topics_levels = {}
+    st.session_state.topics_levels[topic] = new_level_id
+
+    # Clear caches so questions regenerate cleanly
+    st.session_state.generated = None
+    st.session_state.pair_params_map = None
+    st.session_state.level_name_map = None
+    st.session_state.pdf_cache = None
+    st.session_state.pdf_fp = None
+
 def _safe_topic_key(topic: str) -> str:
     return "".join(ch if ch.isalnum() else "_" for ch in topic)
 
