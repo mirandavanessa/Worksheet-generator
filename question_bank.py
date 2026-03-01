@@ -1398,6 +1398,73 @@ TOPIC_ORDER: List[str] = [
 ]
 
 
+# -----------------------------
+# Topic strands (GCSE-style)
+# -----------------------------
+
+# These are the high-level strands used for filtering topics in the UI.
+# They broadly align with GCSE domain groupings (Number / Algebra / Ratio & Proportion /
+# Geometry & Measures / Probability / Statistics), but are kept as a practical UI taxonomy.
+STRAND_ORDER: List[str] = [
+    "Number",
+    "Algebra",
+    "Ratio and proportion",
+    "Geometry and measures",
+    "Statistics",
+    "Probability",
+    "Other",
+    "All",
+]
+
+
+# Primary strand and (optional) extra tags for cross-domain topics.
+TOPIC_STRANDS: Dict[str, Dict[str, Any]] = {
+    # Algebra
+    "Continuing sequences": {"primary": "Algebra", "tags": ["Algebra"]},
+    "Finding the nth term": {"primary": "Algebra", "tags": ["Algebra"]},
+    "Using the nth term": {"primary": "Algebra", "tags": ["Algebra"]},
+    "Solving 1 step equations": {"primary": "Algebra", "tags": ["Algebra"]},
+    "Solving 2 step equations": {"primary": "Algebra", "tags": ["Algebra"]},
+    "Completing the square": {"primary": "Algebra", "tags": ["Algebra"]},
+
+    # Ratio & proportion
+    "Finding percentages using non-calculator methods": {"primary": "Ratio and proportion", "tags": ["Ratio and proportion"]},
+    "Finding percentages using calculator methods": {"primary": "Ratio and proportion", "tags": ["Ratio and proportion"]},
+    "Increasing and decreasing by percentages using non-calculator methods": {"primary": "Ratio and proportion", "tags": ["Ratio and proportion"]},
+    "Increasing and decreasing by percentages using calculator methods": {"primary": "Ratio and proportion", "tags": ["Ratio and proportion"]},
+
+    # Geometry & measures
+    "Perimeter of rectilinear shapes": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
+    "Area of shapes": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
+    "Interior and exterior angles of polygons": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
+    "Reasoning with polygon angles": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
+    # Cross-domain: geometry with algebra
+    "Algebraic geometry and angle equations": {"primary": "Geometry and measures", "tags": ["Geometry and measures", "Algebra"]},
+}
+
+
+def available_strands() -> List[str]:
+    """Return available strand names for UI filtering (includes 'All')."""
+    return STRAND_ORDER
+
+
+def strand_for_topic(topic: str) -> str:
+    meta = TOPIC_STRANDS.get(topic)
+    if not meta:
+        return "Other"
+    return str(meta.get("primary") or "Other")
+
+
+def topics_in_strand(strand: str) -> List[str]:
+    """Return topics (in available_topics() order) filtered by strand."""
+    all_topics = available_topics()
+    if strand == "All":
+        return all_topics
+    if strand == "Other":
+        return [t for t in all_topics if strand_for_topic(t) == "Other"]
+    return [t for t in all_topics if strand_for_topic(t) == strand]
+
+
 def available_topics() -> List[str]:
     topics = {t.topic for t in TEMPLATES}
     order = {name: i for i, name in enumerate(TOPIC_ORDER)}

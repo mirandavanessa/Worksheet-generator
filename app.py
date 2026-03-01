@@ -9,11 +9,13 @@ import streamlit.components.v1 as components
 
 from question_bank import (
     available_levels,
+    available_strands,
     available_topics,
     generate_questions_by_template,
     generate_two_per_topic,
     get_template,
     regenerate_question,
+    topics_in_strand,
 )
 from pdf_export import build_pdf_bytes
 
@@ -27,7 +29,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.9-action-buttons-not-scaled"
+BUILD_ID = "v39.16-strand-topic-selection"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -773,6 +775,7 @@ with st.sidebar:
     st.header("Settings")
 
     _all_topics = available_topics()
+    _all_strands = available_strands()
 
     def _set_topics(new_list: list[str]):
         # keep ordering consistent with available_topics()
@@ -781,6 +784,12 @@ with st.sidebar:
 
     if "topics_select" not in st.session_state:
         _set_topics([t for t in DEFAULT_TOPICS if t in _all_topics])
+
+    # Strand-first browsing (scales as the topic bank grows)
+    if "strand_select" not in st.session_state:
+        st.session_state["strand_select"] = "Algebra" if "Algebra" in _all_strands else (_all_strands[0] if _all_strands else "All")
+
+    strand = st.selectbox("Strand", options=_all_strands, key="strand_select")
 
     # Selection actions
     a, b, c = st.columns(3)
@@ -794,8 +803,15 @@ with st.sidebar:
         _set_topics([])
         st.rerun()
 
-    topics = st.multiselect("Topics", options=_all_topics, key="topics_select")
-    st.caption("Tip: tap Topics and type to search (e.g. Area, Perimeter, Polygon).")
+    # Only show topics from the selected strand, but always include already-selected topics
+    # so the selection never disappears when switching strands.
+    strand_topics = topics_in_strand(strand)
+    cur_sel = list(st.session_state.get("topics_select", []))
+    allowed = set(strand_topics) | set(cur_sel)
+    topic_options = [t for t in _all_topics if t in allowed]
+
+    topics = st.multiselect("Topics", options=topic_options, key="topics_select")
+    st.caption("Type to search. Switch Strand to filter the list.")
 
     max_diff = st.slider("Max difficulty", 1, 5, 5)
 
