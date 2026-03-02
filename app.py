@@ -27,6 +27,19 @@ from question_bank import (
 )
 from pdf_export import build_pdf_bytes
 
+
+# ---- Compatibility patch (Streamlit internal API change) ----
+# streamlit-drawable-canvas (0.9.3) expects `streamlit.elements.image.image_to_url`,
+# but newer Streamlit versions moved it to `streamlit.elements.lib.image_utils`.
+# We add a shim if needed so background_image works.
+try:
+    import streamlit.elements.image as _st_image
+    if not hasattr(_st_image, "image_to_url"):
+        from streamlit.elements.lib.image_utils import image_to_url as _image_to_url
+        _st_image.image_to_url = _image_to_url  # type: ignore[attr-defined]
+except Exception:
+    pass
+
 # Optional drawing canvas (per-question)
 try:
     from streamlit_drawable_canvas import st_canvas  # type: ignore
@@ -37,7 +50,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.25-embed-question-scratchpad"
+BUILD_ID = "v39.26-embed-question-scratchpad-shim"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
