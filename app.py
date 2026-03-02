@@ -827,7 +827,8 @@ def _render_canvas(slot: str):
     ink_map = {
         "black": "#000000",
         "purple": "#B000FF",
-        "green": "#00FF00",
+        # Darker green to match practice answers
+        "green": "#008000",
         "eraser": "#FFFFFF",
     }
     stroke_color = ink_map.get(mode, "#000000")
@@ -943,7 +944,7 @@ def _render_practice_mode():
                     st.rerun()
 
                 if st.session_state[ans_key]:
-                    cAns.latex(rf"\color{{#00ff00}}{{{qs[i].answer_latex}}}")
+                    cAns.latex(rf"\color{{#008000}}{{{qs[i].answer_latex}}}")
                 else:
                     cAns.markdown("&nbsp;", unsafe_allow_html=True)
 
@@ -1218,8 +1219,10 @@ for topic in ordered_topics:
     ans1_key = f"ans__{slot1}"
     work1_key = f"work__{slot1}"
     draw1_key = f"draw__{slot1}"
-    for k in (ans1_key, work1_key, draw1_key):
-        _set_default(k, False)
+    _set_default(ans1_key, False)
+    _set_default(work1_key, False)
+    # Default: scratchpad open
+    _set_default(draw1_key, True)
 
     with c1:
             q1 = grouped[topic][0]
@@ -1282,8 +1285,10 @@ for topic in ordered_topics:
     ans2_key = f"ans__{slot2}"
     work2_key = f"work__{slot2}"
     draw2_key = f"draw__{slot2}"
-    for k in (ans2_key, work2_key, draw2_key):
-        _set_default(k, False)
+    _set_default(ans2_key, False)
+    _set_default(work2_key, False)
+    # Default: scratchpad open
+    _set_default(draw2_key, True)
 
     with c2:
             q2 = grouped[topic][1]
