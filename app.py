@@ -31,7 +31,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.22-controls-above-question"
+BUILD_ID = "v39.23-ink-controls-top"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -833,16 +833,7 @@ def _render_canvas(slot: str):
     stroke_color = ink_map.get(mode, "#000000")
     stroke_width = 12 if mode == "eraser" else 3
 
-    st_canvas(
-        fill_color="rgba(255, 255, 255, 0)",
-        stroke_width=stroke_width,
-        stroke_color=stroke_color,
-        background_color="#FFFFFF",
-        height=728,
-        drawing_mode="freedraw",
-        key=f"canvas__{slot}",
-    )
-
+    # Ink controls ABOVE the scratchpad
     cB, cP, cG, cE, _ = st.columns([1, 1, 1, 1, 8])
     if cB.button("B", key=f"inkB__{slot}", type="secondary"):
         st.session_state[mode_key] = "black"
@@ -857,6 +848,15 @@ def _render_canvas(slot: str):
         st.session_state[mode_key] = "black" if st.session_state[mode_key] == "eraser" else "eraser"
         st.rerun()
 
+    st_canvas(
+        fill_color="rgba(255, 255, 255, 0)",
+        stroke_width=stroke_width,
+        stroke_color=stroke_color,
+        background_color="#FFFFFF",
+        height=728,
+        drawing_mode="freedraw",
+        key=f"canvas__{slot}",
+    )
 
 # ---------------- Practice mode ----------------
 def _enter_practice(topic: str, template_id: str, max_difficulty: int):
