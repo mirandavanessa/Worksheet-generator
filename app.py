@@ -31,7 +31,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.19-presets-fix-scale"
+BUILD_ID = "v39.20-invert-bw"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -173,6 +173,22 @@ def _save_presets_to_query_params(presets: dict) -> None:
 st.markdown(
     r"""
 <style>
+/* Invert theme: white background, black text */
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stApp"], [data-testid="stMain"] {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+section[data-testid="stSidebar"], [data-testid="stSidebar"], [data-testid="stSidebarContent"] {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"] {
+  background: #ffffff !important;
+}
+/* Default text colours */
+div[data-testid="stMarkdownContainer"] { color: #000000; }
+.katex, .katex-display { color: #000000; }
+
 /* Slight top padding so controls aren't hidden behind Streamlit header */
 .block-container { padding-top: 3.4rem; }
 
@@ -190,7 +206,7 @@ div.stButton > button {
   height: 20px !important;
   min-height: 20px !important;
   min-width: 22px !important;
-  background: rgba(0,0,0,0.92) !important;
+  background: rgba(255,255,255,0.92) !important;
   color: #555555 !important;
   border: 1px solid rgba(85,85,85,0.30) !important;
   border-radius: 6px !important;
@@ -225,26 +241,26 @@ div.stButton > button div[data-testid="stMarkdownContainer"] strong {
 
 /* Keep download button readable */
 div[data-testid="stDownloadButton"] button {
-  background: rgba(0,0,0,0.92) !important;
-  color: #FFFFFF !important;
-  border: 1px solid rgba(255,255,255,0.25) !important;
+  background: rgba(255,255,255,0.92) !important;
+  color: #000000 !important;
+  border: 1px solid rgba(0,0,0,0.25) !important;
   font-size: 14px !important;
   height: auto !important;
   padding: 6px 12px !important;
 }
-div[data-testid="stDownloadButton"] button * { color: #FFFFFF !important; }
+div[data-testid="stDownloadButton"] button * { color: #000000 !important; }
 
 /* Sidebar primary button (Regenerate ALL) readable */
 div[data-testid="stSidebar"] button[kind="primary"],
 div[data-testid="stSidebar"] button[data-testid="baseButton-primary"] {
-  background: rgba(0,0,0,0.92) !important;
-  color: #FFFFFF !important;
-  border: 1px solid rgba(255,255,255,0.25) !important;
+  background: rgba(255,255,255,0.92) !important;
+  color: #000000 !important;
+  border: 1px solid rgba(0,0,0,0.25) !important;
   font-size: 14px !important;
   height: auto !important;
   padding: 6px 12px !important;
 }
-div[data-testid="stSidebar"] button[kind="primary"] * { color: #FFFFFF !important; }
+div[data-testid="stSidebar"] button[kind="primary"] * { color: #000000 !important; }
 
 /* Sidebar typography: reduce headings/labels/captions (not the dropdown list itself) */
 section[data-testid="stSidebar"] h1,
@@ -383,6 +399,7 @@ def _render_scale_css(scale: float) -> None:
 <style>
 /* Maths (KaTeX) */
 .katex, .katex-display > .katex {{
+    color: #000000;
     font-size: {scale:.2f}em !important;
 }}
 
@@ -483,14 +500,14 @@ def _inject_overlay_timer():
       left:50%;
       transform: translateX(-50%);
       width:2px;
-      background: rgba(255,255,255,0.85);
+      background: rgba(0,0,0,0.85);
       z-index: 99998;
       pointer-events:none;
     }
     #mw-timer-display{
-      background: rgba(0,0,0,0.92);
-      color:#fff;
-      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.92);
+      color:#000;
+      border: 1px solid rgba(0,0,0,0.25);
       border-radius: 12px;
       padding: 0.55rem 0.85rem;
       font-size: 2.70rem;
@@ -498,18 +515,18 @@ def _inject_overlay_timer():
       letter-spacing: 0.03em;
       cursor: pointer;
       text-align: center;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.14);
     }
     #mw-timer-panel{
       margin-top: 0.45rem;
-      background: rgba(0,0,0,0.92);
-      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(0,0,0,0.18);
       border-radius: 12px;
       padding: 0.55rem 0.65rem;
       display:none;
-      color:#fff;
+      color:#000;
       width: 13.5rem;
-      box-shadow: 0 10px 24px rgba(0,0,0,0.30);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.16);
     }
     #mw-timer-panel label{
       display:block;
@@ -528,7 +545,7 @@ def _inject_overlay_timer():
       background: rgba(255,255,255,0.08);
       border: 1px solid rgba(255,255,255,0.18);
       border-radius: 10px;
-      color:#fff;
+      color:#000;
       padding: 0.35rem 0.45rem;
       font-size: 0.95rem;
     }
@@ -543,7 +560,7 @@ def _inject_overlay_timer():
       background: rgba(255,255,255,0.10);
       border: 1px solid rgba(255,255,255,0.18);
       border-radius: 10px;
-      color:#fff;
+      color:#000;
       padding: 0.35rem 0.45rem;
       font-size: 0.92rem;
       cursor:pointer;
@@ -777,7 +794,7 @@ def _instruction_line(slot: str, align: str = "left"):
     state = int(st.session_state[state_key])
     if state == 0:
         msg = ""
-        color = "#FFFFFF"
+        color = "#000000"
     elif state == 1:
         msg = "EMPTY HANDS! EYES ON THE BOARD!"
         color = "#FF3B3B"
@@ -804,31 +821,31 @@ def _render_canvas(slot: str):
         return
 
     mode_key = f"ink__{slot}"
-    _set_default(mode_key, "white")
+    _set_default(mode_key, "black")
     mode = st.session_state[mode_key]
 
     ink_map = {
-        "white": "#FFFFFF",
+        "black": "#000000",
         "purple": "#B000FF",
         "green": "#00FF00",
-        "eraser": "#000000",
+        "eraser": "#FFFFFF",
     }
-    stroke_color = ink_map.get(mode, "#FFFFFF")
+    stroke_color = ink_map.get(mode, "#000000")
     stroke_width = 12 if mode == "eraser" else 3
 
     st_canvas(
         fill_color="rgba(255, 255, 255, 0)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
-        background_color="#000000",
+        background_color="#FFFFFF",
         height=728,
         drawing_mode="freedraw",
         key=f"canvas__{slot}",
     )
 
-    cW, cP, cG, cE, _ = st.columns([1, 1, 1, 1, 8])
-    if cW.button("W", key=f"inkW__{slot}", type="secondary"):
-        st.session_state[mode_key] = "white"
+    cB, cP, cG, cE, _ = st.columns([1, 1, 1, 1, 8])
+    if cB.button("B", key=f"inkB__{slot}", type="secondary"):
+        st.session_state[mode_key] = "black"
         st.rerun()
     if cP.button("P", key=f"inkP__{slot}", type="secondary"):
         st.session_state[mode_key] = "purple"
@@ -837,7 +854,7 @@ def _render_canvas(slot: str):
         st.session_state[mode_key] = "green"
         st.rerun()
     if cE.button("E", key=f"inkE__{slot}", type="secondary"):
-        st.session_state[mode_key] = "white" if st.session_state[mode_key] == "eraser" else "eraser"
+        st.session_state[mode_key] = "black" if st.session_state[mode_key] == "eraser" else "eraser"
         st.rerun()
 
 

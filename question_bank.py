@@ -74,8 +74,8 @@ def _sig(prompt: str, latex: str, diagram_png: Optional[bytes]) -> Tuple[str, st
 # Diagram helpers (PIL)
 # -----------------------------
 
-_BG = (0, 0, 0)
-_FG = (255, 255, 255)
+_BG = (255, 255, 255)
+_FG = (0, 0, 0)
 
 
 def _default_font(size: int = 18):
@@ -92,7 +92,7 @@ def _img_bytes(img: Image.Image) -> bytes:
 
 
 def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str) -> bytes:
-    """Rectilinear notch shape with labels. Black background, white lines."""
+    """Rectilinear notch shape with labels. White background, black lines."""
     img = Image.new("RGB", (520, 240), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(18)
