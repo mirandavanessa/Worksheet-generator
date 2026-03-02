@@ -1222,54 +1222,60 @@ for topic in ordered_topics:
         _set_default(k, False)
 
     with c1:
-        q1 = grouped[topic][0]
-        _instruction_line(slot1, align="left")
+            q1 = grouped[topic][0]
+            _instruction_line(slot1, align="left")
 
-        st.markdown(f"**{_pretty_text(q1.prompt)}**")
-        if q1.latex.strip():
-            st.latex(q1.latex)
-        if getattr(q1, "diagram_png", None):
-            st.image(q1.diagram_png, use_column_width=True)
+            st.markdown(f"**{_pretty_text(q1.prompt)}**")
+            if q1.latex.strip():
+                st.latex(q1.latex)
+            if getattr(q1, "diagram_png", None):
+                st.image(q1.diagram_png, use_column_width=True)
 
-        if st.session_state[ans1_key]:
-            st.markdown("**Answer:**")
-            st.latex(q1.answer_latex)
+            # Action buttons (above Answer / Working / Draw).
+            # If the scratchpad is showing, put D first on the row.
+            if bool(st.session_state.get(draw1_key, False)):
+                cD, cN, cA, cW, cI = st.columns(5)
+            else:
+                cN, cA, cW, cD, cI = st.columns(5)
 
-        if st.session_state[work1_key]:
-            st.markdown("**Working:**")
-            for kind, content in q1.working:
-                if kind == "text":
-                    st.markdown(f"- {content}")
-                else:
-                    st.latex(content)
+            if cN.button("N", key=f"n__{slot1}", type="secondary"):
+                _regen_one(topic, 0, int(max_diff))
+                st.session_state[ans1_key] = False
+                st.session_state[work1_key] = False
+                st.session_state[draw1_key] = False
+                st.session_state[f"ink__{slot1}"] = "white"
+                st.rerun()
 
-        if st.session_state[draw1_key]:
-            _render_canvas(slot1)
+            if cA.button("A", key=f"a__{slot1}", type="secondary"):
+                _toggle(ans1_key, default=False)
+                st.session_state.pdf_cache = None
+                st.rerun()
 
-        ctrl = st.columns(5)
-        if ctrl[0].button("N", key=f"n__{slot1}", type="secondary"):
-            _regen_one(topic, 0, int(max_diff))
-            st.session_state[ans1_key] = False
-            st.session_state[work1_key] = False
-            st.session_state[draw1_key] = False
-            st.session_state[f"ink__{slot1}"] = "white"
-            st.rerun()
+            if cW.button("W", key=f"w__{slot1}", type="secondary"):
+                _toggle(work1_key, default=False)
+                st.rerun()
 
-        if ctrl[1].button("A", key=f"a__{slot1}", type="secondary"):
-            _toggle(ans1_key, default=False)
-            st.session_state.pdf_cache = None
-            st.rerun()
+            if cD.button("D", key=f"d__{slot1}", type="secondary"):
+                _toggle(draw1_key, default=False)
+                st.rerun()
 
-        if ctrl[2].button("W", key=f"w__{slot1}", type="secondary"):
-            _toggle(work1_key, default=False)
-            st.rerun()
+            if cI.button("I", key=f"i__{slot1}", type="secondary"):
+                _enter_practice(topic=topic, template_id=q1.template_id, max_difficulty=int(max_diff))
 
-        if ctrl[3].button("D", key=f"d__{slot1}", type="secondary"):
-            _toggle(draw1_key, default=False)
-            st.rerun()
+            if st.session_state[ans1_key]:
+                st.markdown("**Answer:**")
+                st.latex(q1.answer_latex)
 
-        if ctrl[4].button("I", key=f"i__{slot1}", type="secondary"):
-            _enter_practice(topic=topic, template_id=q1.template_id, max_difficulty=int(max_diff))
+            if st.session_state[work1_key]:
+                st.markdown("**Working:**")
+                for kind, content in q1.working:
+                    if kind == "text":
+                        st.markdown(f"- {content}")
+                    else:
+                        st.latex(content)
+
+            if st.session_state[draw1_key]:
+                _render_canvas(slot1)
 
     # Q2
     slot2 = _slot(topic, 1)
@@ -1280,66 +1286,70 @@ for topic in ordered_topics:
         _set_default(k, False)
 
     with c2:
-        q2 = grouped[topic][1]
-        _instruction_line(slot2, align="right")
+            q2 = grouped[topic][1]
+            _instruction_line(slot2, align="right")
 
-        if not st.session_state.get(show2_key, False):
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-        else:
-            st.markdown(f"**{_pretty_text(q2.prompt)}**")
-            if q2.latex.strip():
-                st.latex(q2.latex)
-            if getattr(q2, "diagram_png", None):
-                st.image(q2.diagram_png, use_column_width=True)
+            if not st.session_state.get(show2_key, False):
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                ctrl = st.columns([1, 1, 1, 1, 1, 1])
+                if ctrl[5].button("H", key=f"h__{slot2}", type="secondary"):
+                    st.session_state[show2_key] = True
+                    st.rerun()
+            else:
+                st.markdown(f"**{_pretty_text(q2.prompt)}**")
+                if q2.latex.strip():
+                    st.latex(q2.latex)
+                if getattr(q2, "diagram_png", None):
+                    st.image(q2.diagram_png, use_column_width=True)
 
-            if st.session_state[ans2_key]:
-                st.markdown("**Answer:**")
-                st.latex(q2.answer_latex)
+                # Action buttons (above Answer / Working / Draw).
+                # If the scratchpad is showing, put D first on the row.
+                if bool(st.session_state.get(draw2_key, False)):
+                    cD, cN, cA, cW, cI, cH = st.columns(6)
+                else:
+                    cN, cA, cW, cD, cI, cH = st.columns(6)
 
-            if st.session_state[work2_key]:
-                st.markdown("**Working:**")
-                for kind, content in q2.working:
-                    if kind == "text":
-                        st.markdown(f"- {content}")
-                    else:
-                        st.latex(content)
+                if cN.button("N", key=f"n__{slot2}", type="secondary"):
+                    _regen_one(topic, 1, int(max_diff))
+                    st.session_state[ans2_key] = False
+                    st.session_state[work2_key] = False
+                    st.session_state[draw2_key] = False
+                    st.session_state[f"ink__{slot2}"] = "white"
+                    st.rerun()
 
-            if st.session_state[draw2_key]:
-                _render_canvas(slot2)
+                if cA.button("A", key=f"a__{slot2}", type="secondary"):
+                    _toggle(ans2_key, default=False)
+                    st.rerun()
 
-        if st.session_state.get(show2_key, False):
-            ctrl = st.columns(6)
-            if ctrl[0].button("N", key=f"n__{slot2}", type="secondary"):
-                _regen_one(topic, 1, int(max_diff))
-                st.session_state[ans2_key] = False
-                st.session_state[work2_key] = False
-                st.session_state[draw2_key] = False
-                st.session_state[f"ink__{slot2}"] = "white"
-                st.rerun()
+                if cW.button("W", key=f"w__{slot2}", type="secondary"):
+                    _toggle(work2_key, default=False)
+                    st.rerun()
 
-            if ctrl[1].button("A", key=f"a__{slot2}", type="secondary"):
-                _toggle(ans2_key, default=False)
-                st.rerun()
+                if cD.button("D", key=f"d__{slot2}", type="secondary"):
+                    _toggle(draw2_key, default=False)
+                    st.rerun()
 
-            if ctrl[2].button("W", key=f"w__{slot2}", type="secondary"):
-                _toggle(work2_key, default=False)
-                st.rerun()
+                if cI.button("I", key=f"i__{slot2}", type="secondary"):
+                    _enter_practice(topic=topic, template_id=q2.template_id, max_difficulty=int(max_diff))
 
-            if ctrl[3].button("D", key=f"d__{slot2}", type="secondary"):
-                _toggle(draw2_key, default=False)
-                st.rerun()
+                if cH.button("H", key=f"h__{slot2}", type="secondary"):
+                    st.session_state[show2_key] = not st.session_state.get(show2_key, False)
+                    st.rerun()
 
-            if ctrl[4].button("I", key=f"i__{slot2}", type="secondary"):
-                _enter_practice(topic=topic, template_id=q2.template_id, max_difficulty=int(max_diff))
+                if st.session_state[ans2_key]:
+                    st.markdown("**Answer:**")
+                    st.latex(q2.answer_latex)
 
-            if ctrl[5].button("H", key=f"h__{slot2}", type="secondary"):
-                st.session_state[show2_key] = not st.session_state.get(show2_key, False)
-                st.rerun()
-        else:
-            ctrl = st.columns([1, 1, 1, 1, 1, 1])
-            if ctrl[5].button("H", key=f"h__{slot2}", type="secondary"):
-                st.session_state[show2_key] = True
-                st.rerun()
+                if st.session_state[work2_key]:
+                    st.markdown("**Working:**")
+                    for kind, content in q2.working:
+                        if kind == "text":
+                            st.markdown(f"- {content}")
+                        else:
+                            st.latex(content)
+
+                if st.session_state[draw2_key]:
+                    _render_canvas(slot2)
 
     st.markdown(f"<div style='height: {GAP_VH}vh'></div>", unsafe_allow_html=True)
 
