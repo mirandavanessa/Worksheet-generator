@@ -5,6 +5,12 @@ import random
 import html
 import json
 import base64
+import io
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw, ImageFont
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -31,7 +37,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.23-ink-controls-top"
+BUILD_ID = "v39.25-embed-question-scratchpad"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -814,11 +820,135 @@ def _instruction_line(slot: str, align: str = "left"):
         )
 
 
-# ---------------- Canvas ----------------
-def _render_canvas(slot: str):
+
+# ---------------- Canvas (embedded question background + height zoom) ----------------
+
+def _pil_font(size: int) -> ImageFont.FreeTypeFont:
+    try:
+        return ImageFont.truetype("DejaVuSans.ttf", size=size)
+    except Exception:
+        return ImageFont.load_default()
+
+
+def _latex_to_rgba(latex: str, fontsize: int = 22, dpi: int = 220) -> Image.Image:
+    """Render matplotlib mathtext to tight transparent PNG (RGBA)."""
+    fig = plt.figure(figsize=(0.01, 0.01), dpi=dpi)
+    fig.patch.set_alpha(0.0)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.axis("off")
+    ax.text(0, 0.5, f"${latex}$", fontsize=fontsize, va="center", ha="left", color="black")
+    fig.canvas.draw()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, transparent=True, bbox_inches="tight", pad_inches=0.06)
+    plt.close(fig)
+    buf.seek(0)
+    return Image.open(buf).convert("RGBA")
+
+
+def _text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> float:
+    try:
+        return float(draw.textlength(text, font=font))
+    except Exception:
+        box = draw.textbbox((0, 0), text, font=font)
+        return float(box[2] - box[0])
+
+
+def _wrap_pil_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int) -> list[str]:
+    words = text.split()
+    lines: list[str] = []
+    cur = ""
+    for w in words:
+        test = (cur + " " + w).strip()
+        if _text_width(draw, test, font) <= max_w:
+            cur = test
+        else:
+            if cur:
+                lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+@st.cache_data(show_spinner=False)
+def _question_bg_png(
+    prompt: str,
+    latex: str,
+    diagram_png: bytes | None,
+    ui_scale: float,
+    width_px: int,
+    height_px: int,
+) -> bytes:
+    """
+    Build a full-height scratchpad background:
+    - question content at the top (prompt + latex + diagram)
+    - blank space underneath for working
+    """
+    img = Image.new("RGBA", (width_px, height_px), (255, 255, 255, 255))
+    draw = ImageDraw.Draw(img)
+
+    pad = int(14 * ui_scale)
+    y = pad
+    max_text_w = width_px - 2 * pad
+
+    # Prompt
+    prompt_font = _pil_font(max(12, int(18 * ui_scale)))
+    for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
+        draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
+        y += int(prompt_font.size * 1.20)
+
+    y += int(8 * ui_scale)
+
+    # LaTeX
+    if latex and latex.strip():
+        latex_img = _latex_to_rgba(latex.strip(), fontsize=max(14, int(22 * ui_scale)))
+        if latex_img.width > max_text_w:
+            s = max_text_w / float(latex_img.width)
+            new_w = max(1, int(latex_img.width * s))
+            new_h = max(1, int(latex_img.height * s))
+            latex_img = latex_img.resize((new_w, new_h), Image.LANCZOS)
+        img.alpha_composite(latex_img, dest=(pad, y))
+        y += latex_img.height + int(10 * ui_scale)
+
+    # Diagram (optional)
+    if diagram_png:
+        d = Image.open(io.BytesIO(diagram_png)).convert("RGBA")
+
+        # Scale diagram to fit width; cap height so it doesn't eat the workspace.
+        # Scale cap gently with ui_scale (but not 1:1).
+        max_diag_h = int(260 * min(max(ui_scale, 1.0), 2.0))
+        scale = min(max_text_w / float(d.width), max_diag_h / float(d.height), 1.0)
+        new_w = max(1, int(d.width * scale))
+        new_h = max(1, int(d.height * scale))
+        d = d.resize((new_w, new_h), Image.LANCZOS)
+        img.alpha_composite(d, dest=(pad, y))
+        y += d.height + int(8 * ui_scale)
+
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+def _render_canvas(slot: str, q) -> None:
+    """Per-question scratchpad with embedded question background and height-zoom controls."""
     if not _CANVAS_OK:
         st.warning("Drawing component not available. Ensure 'streamlit-drawable-canvas' is installed.")
         return
+
+    # Default height: +25% from previous tall pad (728 -> 910)
+    DEFAULT_H = 910
+    STEP = 150
+    MIN_H = 620
+    MAX_H = 1600
+    CANVAS_W = 700  # keep width consistent with the previous canvas
+
+    h_key = f"canvas_h__{slot}"
+    if h_key not in st.session_state:
+        st.session_state[h_key] = DEFAULT_H
+
+    ver_key = f"canvas_ver__{slot}"
+    _set_default(ver_key, 0)
 
     mode_key = f"ink__{slot}"
     _set_default(mode_key, "black")
@@ -827,15 +957,24 @@ def _render_canvas(slot: str):
     ink_map = {
         "black": "#000000",
         "purple": "#B000FF",
-        # Darker green to match practice answers
         "green": "#008000",
         "eraser": "#FFFFFF",
     }
     stroke_color = ink_map.get(mode, "#000000")
     stroke_width = 12 if mode == "eraser" else 3
 
-    # Ink controls ABOVE the scratchpad
-    cB, cP, cG, cE, _ = st.columns([1, 1, 1, 1, 8])
+    # Controls ABOVE the scratchpad: zoom then ink
+    cZm, cZp, cZr, cB, cP, cG, cE, _ = st.columns([1, 1, 1, 1, 1, 1, 1, 8])
+    if cZm.button("−", key=f"zhm__{slot}", type="secondary"):
+        st.session_state[h_key] = max(MIN_H, int(st.session_state[h_key]) - STEP)
+        st.rerun()
+    if cZp.button("+", key=f"zhp__{slot}", type="secondary"):
+        st.session_state[h_key] = min(MAX_H, int(st.session_state[h_key]) + STEP)
+        st.rerun()
+    if cZr.button("R", key=f"zhr__{slot}", type="secondary"):
+        st.session_state[h_key] = DEFAULT_H
+        st.rerun()
+
     if cB.button("B", key=f"inkB__{slot}", type="secondary"):
         st.session_state[mode_key] = "black"
         st.rerun()
@@ -849,15 +988,29 @@ def _render_canvas(slot: str):
         st.session_state[mode_key] = "black" if st.session_state[mode_key] == "eraser" else "eraser"
         st.rerun()
 
+    ui_scale = float(st.session_state.get("ui_scale", 3.0))
+    bg_bytes = _question_bg_png(
+        prompt=q.prompt,
+        latex=q.latex,
+        diagram_png=getattr(q, "diagram_png", None),
+        ui_scale=ui_scale,
+        width_px=CANVAS_W,
+        height_px=int(st.session_state[h_key]),
+    )
+    bg_img = Image.open(io.BytesIO(bg_bytes)).convert("RGBA")
+
     st_canvas(
         fill_color="rgba(255, 255, 255, 0)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
         background_color="#FFFFFF",
-        height=728,
+        background_image=bg_img,
+        height=int(st.session_state[h_key]),
+        width=CANVAS_W,
         drawing_mode="freedraw",
-        key=f"canvas__{slot}",
+        key=f"canvas__{slot}__{int(st.session_state[ver_key])}",
     )
+
 
 # ---------------- Practice mode ----------------
 def _enter_practice(topic: str, template_id: str, max_difficulty: int):
@@ -1228,7 +1381,7 @@ for topic in ordered_topics:
             q1 = grouped[topic][0]
             _instruction_line(slot1, align="left")
 
-            # Action buttons (above Answer / Working / Draw).
+            # Action buttons (always above the scratchpad / answer / working).
             # If the scratchpad is showing, put D first on the row.
             if bool(st.session_state.get(draw1_key, False)):
                 cD, cN, cA, cW, cI = st.columns(5)
@@ -1239,8 +1392,10 @@ for topic in ordered_topics:
                 _regen_one(topic, 0, int(max_diff))
                 st.session_state[ans1_key] = False
                 st.session_state[work1_key] = False
-                st.session_state[draw1_key] = False
-                st.session_state[f"ink__{slot1}"] = "white"
+                st.session_state[draw1_key] = True
+                st.session_state[f"ink__{slot1}"] = "black"
+                st.session_state[f"canvas_ver__{slot1}"] = int(st.session_state.get(f"canvas_ver__{slot1}", 0)) + 1
+                st.session_state[f"canvas_h__{slot1}"] = 910
                 st.rerun()
 
             if cA.button("A", key=f"a__{slot1}", type="secondary"):
@@ -1259,11 +1414,15 @@ for topic in ordered_topics:
             if cI.button("I", key=f"i__{slot1}", type="secondary"):
                 _enter_practice(topic=topic, template_id=q1.template_id, max_difficulty=int(max_diff))
 
-            st.markdown(f"**{_pretty_text(q1.prompt)}**")
-            if q1.latex.strip():
-                st.latex(q1.latex)
-            if getattr(q1, "diagram_png", None):
-                st.image(q1.diagram_png, use_column_width=True)
+            # Main view: question embedded into scratchpad (default), or shown normally if scratchpad is hidden
+            if st.session_state.get(draw1_key, False):
+                _render_canvas(slot1, q1)
+            else:
+                st.markdown(f"**{_pretty_text(q1.prompt)}**")
+                if q1.latex.strip():
+                    st.latex(q1.latex)
+                if getattr(q1, "diagram_png", None):
+                    st.image(q1.diagram_png, use_column_width=True)
 
             if st.session_state[ans1_key]:
                 st.markdown("**Answer:**")
@@ -1277,8 +1436,6 @@ for topic in ordered_topics:
                     else:
                         st.latex(content)
 
-            if st.session_state[draw1_key]:
-                _render_canvas(slot1)
 
     # Q2
     slot2 = _slot(topic, 1)
@@ -1301,7 +1458,7 @@ for topic in ordered_topics:
                     st.session_state[show2_key] = True
                     st.rerun()
             else:
-                # Action buttons (above Answer / Working / Draw).
+                # Action buttons (always above the scratchpad / answer / working).
                 # If the scratchpad is showing, put D first on the row.
                 if bool(st.session_state.get(draw2_key, False)):
                     cD, cN, cA, cW, cI, cH = st.columns(6)
@@ -1312,8 +1469,10 @@ for topic in ordered_topics:
                     _regen_one(topic, 1, int(max_diff))
                     st.session_state[ans2_key] = False
                     st.session_state[work2_key] = False
-                    st.session_state[draw2_key] = False
-                    st.session_state[f"ink__{slot2}"] = "white"
+                    st.session_state[draw2_key] = True
+                    st.session_state[f"ink__{slot2}"] = "black"
+                    st.session_state[f"canvas_ver__{slot2}"] = int(st.session_state.get(f"canvas_ver__{slot2}", 0)) + 1
+                    st.session_state[f"canvas_h__{slot2}"] = 910
                     st.rerun()
 
                 if cA.button("A", key=f"a__{slot2}", type="secondary"):
@@ -1335,11 +1494,15 @@ for topic in ordered_topics:
                     st.session_state[show2_key] = not st.session_state.get(show2_key, False)
                     st.rerun()
 
-                st.markdown(f"**{_pretty_text(q2.prompt)}**")
-                if q2.latex.strip():
-                    st.latex(q2.latex)
-                if getattr(q2, "diagram_png", None):
-                    st.image(q2.diagram_png, use_column_width=True)
+                # Main view: question embedded into scratchpad (default), or shown normally if scratchpad is hidden
+                if st.session_state.get(draw2_key, False):
+                    _render_canvas(slot2, q2)
+                else:
+                    st.markdown(f"**{_pretty_text(q2.prompt)}**")
+                    if q2.latex.strip():
+                        st.latex(q2.latex)
+                    if getattr(q2, "diagram_png", None):
+                        st.image(q2.diagram_png, use_column_width=True)
 
                 if st.session_state[ans2_key]:
                     st.markdown("**Answer:**")
@@ -1353,8 +1516,6 @@ for topic in ordered_topics:
                         else:
                             st.latex(content)
 
-                if st.session_state[draw2_key]:
-                    _render_canvas(slot2)
 
     st.markdown(f"<div style='height: {GAP_VH}vh'></div>", unsafe_allow_html=True)
 
