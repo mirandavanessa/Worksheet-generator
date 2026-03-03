@@ -1015,17 +1015,18 @@ def _call_st_canvas_compat(*, _bg_img=None, _bg_bytes: bytes | None = None, **ba
     return st_canvas(**base_kwargs)
 
 def _render_canvas(slot: str, q) -> None:
-    """Per-question scratchpad with embedded question background and height-zoom controls."""
-    if not _CANVAS_OK:
-        st.warning("Drawing component not available. Ensure 'streamlit-drawable-canvas' is installed.")
-        return
+    """Per-question scratchpad with embedded question as a fixed background image.
 
+    Uses a lightweight HTML/JS canvas overlay (via components.html) instead of
+    streamlit-drawable-canvas background_image, which is unreliable on some
+    Streamlit Cloud builds.
+    """
     # Default height: +25% from previous tall pad (728 -> 910)
     DEFAULT_H = 910
     STEP = 150
     MIN_H = 620
     MAX_H = 1600
-    CANVAS_W = 700  # keep width consistent with the previous canvas
+    CANVAS_W = 700  # keep width consistent
 
     h_key = f"canvas_h__{slot}"
     if h_key not in st.session_state:
@@ -1038,17 +1039,19 @@ def _render_canvas(slot: str, q) -> None:
     _set_default(mode_key, "black")
     mode = st.session_state[mode_key]
 
+    # Colours (white theme): black/purple/dark-green + eraser removes strokes
     ink_map = {
         "black": "#000000",
         "purple": "#B000FF",
         "green": "#008000",
-        "eraser": "#FFFFFF",
+        "eraser": "#000000",  # colour unused in eraser mode
     }
     stroke_color = ink_map.get(mode, "#000000")
     stroke_width = 12 if mode == "eraser" else 3
 
     # Controls ABOVE the scratchpad: zoom then ink
     cZm, cZp, cZr, cB, cP, cG, cE, _ = st.columns([1, 1, 1, 1, 1, 1, 1, 8])
+
     if cZm.button("−", key=f"zhm__{slot}", type="secondary"):
         st.session_state[h_key] = max(MIN_H, int(st.session_state[h_key]) - STEP)
         st.rerun()
@@ -1073,27 +1076,111 @@ def _render_canvas(slot: str, q) -> None:
         st.rerun()
 
     ui_scale = float(st.session_state.get("ui_scale", 3.0))
+    height_px = int(st.session_state[h_key])
+
     bg_bytes = _question_bg_png(
         prompt=q.prompt,
         latex=q.latex,
         diagram_png=getattr(q, "diagram_png", None),
         ui_scale=ui_scale,
         width_px=CANVAS_W,
-        height_px=int(st.session_state[h_key]),
+        height_px=height_px,
     )
-    bg_img = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
+    bg_b64 = base64.b64encode(bg_bytes).decode("ascii")
 
-    _call_st_canvas_compat(
-        fill_color="rgba(255, 255, 255, 0)",
-        stroke_width=stroke_width,
-        stroke_color=stroke_color,
-        height=int(st.session_state[h_key]),
-        width=CANVAS_W,
-        drawing_mode="freedraw",
-        key=f"canvas__{slot}__{int(st.session_state[ver_key])}",
-        _bg_img=bg_img,
-        _bg_bytes=bg_bytes,
-    )
+    # Use a localStorage key that changes when the question changes
+    ls_key = f"mw_pad::{slot}::{int(st.session_state[ver_key])}::{getattr(q, 'qid', '')}"
+
+    # HTML scratchpad: background image + transparent drawing canvas overlay.
+    # Drawing is stored in localStorage as a PNG dataURL, so reruns/refresh keep the ink.
+    html_block = f"""
+<div id="{ls_key}" style="width:{CANVAS_W}px; height:{height_px}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
+  <img id="bg" src="data:image/png;base64,{bg_b64}" style="position:absolute; left:0; top:0; width:{CANVAS_W}px; height:{height_px}px; pointer-events:none; user-select:none;" />
+  <canvas id="draw" width="{CANVAS_W}" height="{height_px}" style="position:absolute; left:0; top:0; touch-action:none;"></canvas>
+</div>
+<script>
+(function(){{
+  const KEY = {json.dumps(ls_key)};
+  const root = document.getElementById({json.dumps(ls_key)});
+  if(!root) return;
+  const canvas = root.querySelector('#draw');
+  const ctx = canvas.getContext('2d');
+
+  // Restore previous ink layer
+  try {{
+    const saved = window.localStorage.getItem(KEY);
+    if(saved) {{
+      const img = new Image();
+      img.onload = () => {{ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); }};
+      img.src = saved;
+    }}
+  }} catch(e){{}}
+
+  let drawing = false;
+  let lastX = 0, lastY = 0;
+
+  function getPos(ev){{
+    const rect = canvas.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (ev.clientY - rect.top) * (canvas.height / rect.height);
+    return [x,y];
+  }}
+
+  function setMode(){{
+    const mode = {json.dumps(mode)};
+    if(mode === 'eraser'){{
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+      ctx.lineWidth = {stroke_width};
+    }} else {{
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = {json.dumps(stroke_color)};
+      ctx.lineWidth = {stroke_width};
+    }}
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }}
+  setMode();
+
+  function save(){{
+    try {{
+      const url = canvas.toDataURL('image/png');
+      window.localStorage.setItem(KEY, url);
+    }} catch(e){{}}
+  }}
+
+  function pointerDown(ev){{
+    drawing = true;
+    const [x,y] = getPos(ev);
+    lastX = x; lastY = y;
+    ev.preventDefault();
+  }}
+  function pointerMove(ev){{
+    if(!drawing) return;
+    const [x,y] = getPos(ev);
+    ctx.beginPath();
+    ctx.moveTo(lastX,lastY);
+    ctx.lineTo(x,y);
+    ctx.stroke();
+    lastX = x; lastY = y;
+    ev.preventDefault();
+  }}
+  function pointerUp(ev){{
+    if(!drawing) return;
+    drawing = false;
+    save();
+    ev.preventDefault();
+  }}
+
+  canvas.addEventListener('pointerdown', pointerDown);
+  canvas.addEventListener('pointermove', pointerMove);
+  canvas.addEventListener('pointerup', pointerUp);
+  canvas.addEventListener('pointercancel', pointerUp);
+  canvas.addEventListener('pointerleave', pointerUp);
+}})();
+</script>
+"""
+    components.html(html_block, height=height_px + 6)
 
 
 # ---------------- Practice mode ----------------
