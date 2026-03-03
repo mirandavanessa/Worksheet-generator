@@ -97,6 +97,15 @@ def _label(draw: ImageDraw.ImageDraw, xy: Tuple[float, float], text: str, font: 
     draw.text((x0, y0), text, fill=_FG, font=font)
 
 
+def _label_center(draw: ImageDraw.ImageDraw, center: Tuple[float, float], text: str,
+                  font: ImageFont.ImageFont, pad: int = 3):
+    """Draw a label centred at (x, y) with a small background box."""
+    cx, cy = center
+    w, h = _text_bbox(draw, text, font)
+    _label(draw, (cx - w / 2, cy - h / 2), text, font, pad=pad)
+
+
+
 def _arrowhead(draw: ImageDraw.ImageDraw, tip: Tuple[float, float], direction: Tuple[float, float], size: int = 8):
     """Draw a simple filled triangular arrowhead."""
     tx, ty = tip
@@ -179,8 +188,7 @@ def _img_bytes(img: Image.Image) -> bytes:
 
 
 def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str) -> bytes:
-    """Rectilinear notch shape with labels. White background, black lines."""
-    # Slightly larger canvas prevents dimension labels clipping at the edges.
+    """Rectilinear notch shape with clear GCSE-style labels (no arrow dimension lines)."""
     img = Image.new("RGB", (580, 280), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(27)
@@ -205,20 +213,19 @@ def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str)
     pts = [p0, p1, p2, p3, p4, p5, p6, p7, p0]
     draw.line(pts, fill=_FG, width=4)
 
-    # Dimension-style labels (GCSE-style: outside the shape with arrowheads)
-    _dim_h(draw, p0[0], p1[0], y0, offset=24, label=W, font=font)
-    _dim_v(draw, p2[1], p1[1], x1, offset=24, label=H, font=font)
-    _dim_h(draw, p7[0], p6[0], y1, offset=-24, label=L1, font=font)
-    _dim_h(draw, p3[0], p2[0], y1, offset=-24, label=L2, font=font)
-    _dim_h(draw, p5[0], p4[0], p5[1], offset=20, label=w, font=font)
-    # Put notch depth label inside the notch area to avoid clashing with outer height
-    _dim_v(draw, p3[1], p4[1], p3[0], offset=-26, label=d, font=font)
+    # Labels placed close to the relevant edges (outside when possible) with a small box
+    # so lines don't show through. This matches typical GCSE worksheet diagrams.
+    _label_center(draw, ((p0[0] + p1[0]) / 2, y0 + 18), W, font)                         # bottom width
+    _label_center(draw, (x1 + 28, (p1[1] + p2[1]) / 2), H, font)                          # right height
+    _label_center(draw, ((p7[0] + p6[0]) / 2, y1 - 18), L1, font)                         # top-left segment
+    _label_center(draw, ((p3[0] + p2[0]) / 2, y1 - 18), L2, font)                         # top-right segment
+    _label_center(draw, ((p5[0] + p4[0]) / 2, p5[1] + 18), w, font)                       # notch bottom
+    _label_center(draw, (p3[0] + 26, (p3[1] + p4[1]) / 2), d, font)                       # notch depth
 
     return _img_bytes(img)
 
-
 def _rectangle_diagram(L: str, W: str) -> bytes:
-    """Axis-aligned rectangle labelled with length (bottom) and width (right)."""
+    """Axis-aligned rectangle with simple outside labels (no arrows)."""
     img = Image.new("RGB", (420, 220), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(27)
@@ -227,13 +234,13 @@ def _rectangle_diagram(L: str, W: str) -> bytes:
     x1, y1 = 350, 60
     draw.rectangle([x0, y1, x1, y0], outline=_FG, width=4)
 
-    _dim_h(draw, x0, x1, y0, offset=22, label=L, font=font)
-    _dim_v(draw, y1, y0, x1, offset=22, label=W, font=font)
+    _label_center(draw, ((x0 + x1) / 2, y0 + 18), L, font)                 # length
+    _label_center(draw, (x1 + 24, (y0 + y1) / 2), W, font)                 # width
+
     return _img_bytes(img)
 
-
 def _triangle_diagram(base: str, height: str) -> bytes:
-    """Triangle with a height dropped to the base (perpendicular)."""
+    """Triangle with dashed perpendicular height and clear labels (no arrows)."""
     img = Image.new("RGB", (420, 240), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(27)
@@ -248,18 +255,15 @@ def _triangle_diagram(base: str, height: str) -> bytes:
     _dashed_line(draw, C, foot, dash=7, gap=6, lw=2)
 
     ra = 10
-    draw.line(
-        [(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)],
-        fill=_FG,
-        width=2,
-    )
+    draw.line([(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)], fill=_FG, width=2)
 
-    _dim_h(draw, A[0], B[0], A[1], offset=22, label=base, font=font)
-    _dim_v(draw, C[1], foot[1], foot[0], offset=24, label=height, font=font)
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 18), base, font)                  # base
+    _label_center(draw, (foot[0] + 26, (C[1] + foot[1]) / 2), height, font)          # height
+
     return _img_bytes(img)
 
-
 def _parallelogram_diagram(base: str, height: str) -> bytes:
+    """Parallelogram with dashed perpendicular height and simple labels."""
     img = Image.new("RGB", (460, 240), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(27)
@@ -277,13 +281,13 @@ def _parallelogram_diagram(base: str, height: str) -> bytes:
     ra = 10
     draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
 
-    _dim_h(draw, A[0], B[0], A[1], offset=22, label=base, font=font)
-    _dim_v(draw, D[1], foot[1], foot[0], offset=-26, label=height, font=font)
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 18), base, font)                   # base
+    _label_center(draw, (foot[0] - 26, (D[1] + foot[1]) / 2), height, font)           # height (left side)
+
     return _img_bytes(img)
 
-
 def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
-    """Trapezium with parallel sides a (top) and b (bottom) and height h."""
+    """Trapezium with parallel sides a (top) and b (bottom) and dashed perpendicular height."""
     img = Image.new("RGB", (480, 260), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(27)
@@ -301,14 +305,14 @@ def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
     ra = 10
     draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
 
-    _dim_h(draw, D[0], C[0], D[1], offset=-22, label=a, font=font)
-    _dim_h(draw, A[0], B[0], A[1], offset=22, label=b, font=font)
-    _dim_v(draw, D[1], foot[1], foot[0], offset=-26, label=h, font=font)
+    _label_center(draw, ((D[0] + C[0]) / 2, D[1] - 18), a, font)                      # top
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 18), b, font)                      # bottom
+    _label_center(draw, (foot[0] - 28, (D[1] + foot[1]) / 2), h, font)                # height
+
     return _img_bytes(img)
 
-
 def _kite_diagram(d1: str, d2: str) -> bytes:
-    """Kite/rhombus with diagonals labelled."""
+    """Kite/rhombus with dashed diagonals and labels (no arrows)."""
     img = Image.new("RGB", (420, 260), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(27)
@@ -320,23 +324,15 @@ def _kite_diagram(d1: str, d2: str) -> bytes:
 
     draw.line([top, right, bottom, left, top], fill=_FG, width=4)
 
-    # Diagonals shown with dashed lines (common in exam resources)
+    # diagonals (dashed)
     _dashed_line(draw, top, bottom, dash=7, gap=6, lw=2)
     _dashed_line(draw, left, right, dash=7, gap=6, lw=2)
 
-    # Right angle marker at intersection (kite diagonals are perpendicular)
-    cx, cy = 210, 130
-    ra = 10
-    draw.line([(cx, cy), (cx + ra, cy), (cx + ra, cy + ra)], fill=_FG, width=2)
+    # labels slightly offset from the diagonals
+    _label_center(draw, (230, 125), d1, font)      # vertical diagonal
+    _label_center(draw, (170, 150), d2, font)      # horizontal diagonal
 
-    _dim_v(draw, top[1], bottom[1], cx, offset=26, label=d1, font=font)
-    _dim_h(draw, left[0], right[0], cy, offset=26, label=d2, font=font)
     return _img_bytes(img)
-
-
-# -----------------------------
-# Data models
-# -----------------------------
 
 @dataclass(frozen=True)
 class GeneratedQuestion:
