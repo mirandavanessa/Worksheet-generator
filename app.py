@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.34-html-scratchpad-widthfix-height"
+BUILD_ID = "v39.36-html-scratchpad-zoom-text"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -824,11 +824,16 @@ def _instruction_line(slot: str, align: str = "left"):
 
 # ---------------- Canvas (embedded question background + height zoom) ----------------
 
-def _pil_font(size: int) -> ImageFont.FreeTypeFont:
+def _pil_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    """Best-effort font loader for embedded scratchpad question images."""
     try:
-        return ImageFont.truetype("DejaVuSans.ttf", size=size)
+        fname = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+        return ImageFont.truetype(fname, size=size)
     except Exception:
-        return ImageFont.load_default()
+        try:
+            return ImageFont.truetype("DejaVuSans.ttf", size=size)
+        except Exception:
+            return ImageFont.load_default()
 
 
 def _latex_to_rgba(latex: str, fontsize: int = 22, dpi: int = 220) -> Image.Image:
@@ -906,10 +911,10 @@ def _question_bg_png(
         max_text_w = width_px - 2 * pad
 
         # Prompt (keep footprint similar to the old on-page prompt)
-        prompt_font = _pil_font(max(12, int(18 * scale)))
+        prompt_font = _pil_font(max(14, int(24 * scale)), bold=True)
         for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
             draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
-            y += int(prompt_font.size * 1.18)
+            y += int(prompt_font.size * 1.22)
 
         y += int(8 * scale)
 
@@ -1045,7 +1050,7 @@ def _render_canvas(slot: str, q) -> None:
     """
     # Taller by default (working space), but not so tall that it distorts the embedded image.
     DEFAULT_H = 1020
-    STEP = 420   # make zoom clearly noticeable
+    STEP = 800   # make zoom very obvious
     MIN_H = 720
     MAX_H = 2400
 
@@ -1124,6 +1129,7 @@ def _render_canvas(slot: str, q) -> None:
     dom_id = f"{storage_key}__h{height_px}"
 
     html_block = f"""
+<style>html,body{{margin:0;padding:0;background:#ffffff;}}</style>
 <div id="{dom_id}" style="width:100%; height:{height_px}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
   <img src="data:image/png;base64,{bg_b64}"
        style="position:absolute; left:0; top:0; width:100%; height:auto; pointer-events:none; user-select:none;" />
