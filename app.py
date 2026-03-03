@@ -418,7 +418,7 @@ div[data-testid="stMarkdownContainer"] p,
 div[data-testid="stMarkdownContainer"] li,
 div[data-testid="stMarkdownContainer"] strong,
 div[data-testid="stMarkdownContainer"] span {{
-    font-size: {scale:.2f}rem !important;
+    font-size: {1.15*scale:.2f}rem !important;
     line-height: 1.20 !important;
     margin: 0 !important;
 }}
@@ -432,7 +432,7 @@ div[data-testid="stMarkdownContainer"] li {{ margin: 0 0 0.08rem 0 !important; }
 div[data-testid="stCaptionContainer"],
 .stCaption,
 label {{
-    font-size: {0.85*scale:.2f}rem !important;
+    font-size: {0.95*scale:.2f}rem !important;
 }}
 
 /* Re-apply sidebar typography reduction AFTER scale injection */
@@ -952,10 +952,10 @@ def _question_bg_png(
         max_text_w = width_px - 2 * pad
 
         # Prompt (keep footprint similar to the old on-page prompt)
-        prompt_font = _pil_font(max(14, int(24 * scale)), bold=True)
+        prompt_font = _pil_font(max(14, int(32 * scale)), bold=True)
         for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
             draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
-            y += int(prompt_font.size * 1.22)
+            y += int(prompt_font.size * 1.18)
 
         y += int(8 * scale)
 
@@ -974,10 +974,10 @@ def _question_bg_png(
         if diagram_png:
             d = Image.open(io.BytesIO(diagram_png)).convert("RGBA")
             # Cap diagram height so it doesn't eat the workspace.
-            max_diag_h = int(250 * scale)
-            max_diag_h = max(220, min(max_diag_h, 520))
+            max_diag_h = int(340 * scale)
+            max_diag_h = max(280, min(max_diag_h, 700))
             # Allow upscaling so the zoom buttons enlarge diagrams too (cap to reduce pixelation).
-            s = min(max_text_w / float(d.width), max_diag_h / float(d.height), 2.0)
+            s = min(max_text_w / float(d.width), max_diag_h / float(d.height), 2.4)
             new_w = max(1, int(d.width * s))
             new_h = max(1, int(d.height * s))
             d = d.resize((new_w, new_h), Image.LANCZOS)
