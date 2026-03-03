@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.36-html-scratchpad-zoom-text"
+BUILD_ID = "v39.37-zoom-key-wipe-eraser"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -1048,11 +1048,11 @@ def _render_canvas(slot: str, q) -> None:
     This uses a lightweight HTML/JS drawing layer (components.html) so we can
     reliably show a question image background on Streamlit Cloud.
     """
-    # Taller by default (working space), but not so tall that it distorts the embedded image.
-    DEFAULT_H = 1020
-    STEP = 800   # make zoom very obvious
-    MIN_H = 720
-    MAX_H = 2400
+    # Taller by default (more working space). Height-zoom must be visibly effective.
+    DEFAULT_H = 1500
+    STEP = 600
+    MIN_H = 900
+    MAX_H = 3200
 
     # Internal render width (higher = crisper when downscaled). Display is responsive.
     CANVAS_W = 900
@@ -1078,8 +1078,8 @@ def _render_canvas(slot: str, q) -> None:
     stroke_color = ink_map.get(mode, "#000000")
     stroke_width = 12 if mode == "eraser" else 3
 
-    # Controls ABOVE the scratchpad: zoom then ink
-    cZm, cZp, cZr, cB, cP, cG, cE, _ = st.columns([1, 1, 1, 1, 1, 1, 1, 8])
+    # Controls ABOVE the scratchpad: zoom then ink + eraser + wipe
+    cZm, cZp, cZr, cB, cP, cG, cE, cX, _ = st.columns([1, 1, 1, 1, 1, 1, 1, 1, 7])
 
     if cZm.button("−", key=f"zhm__{slot}", type="secondary"):
         st.session_state[h_key] = max(MIN_H, int(st.session_state[h_key]) - STEP)
@@ -1102,6 +1102,12 @@ def _render_canvas(slot: str, q) -> None:
         st.rerun()
     if cE.button("E", key=f"inkE__{slot}", type="secondary"):
         st.session_state[mode_key] = "black" if st.session_state[mode_key] == "eraser" else "eraser"
+        st.rerun()
+
+    # Wipe (clear) the whole ink layer (useful in class). Keeps the question background.
+    if cX.button("X", key=f"wipe__{slot}", type="secondary"):
+        st.session_state[ver_key] = int(st.session_state.get(ver_key, 0)) + 1
+        st.session_state[mode_key] = "black"
         st.rerun()
 
     ui_scale = float(st.session_state.get("ui_scale", 3.0))
@@ -1218,7 +1224,12 @@ def _render_canvas(slot: str, q) -> None:
 }})();
 </script>
 """
-    components.html(html_block, height=height_px + 8)
+    # IMPORTANT: provide a key so Streamlit fully re-mounts the component when height changes.
+    components.html(
+        html_block,
+        height=height_px + 8,
+        key=f"pad__{slot}__v{int(st.session_state[ver_key])}__h{height_px}",
+    )
 
 
 # ---------------- Practice mode ----------------
