@@ -880,6 +880,7 @@ def _question_bg_png(
     embed_scale: float,
     width_px: int,
     height_px: int,
+    content_ratio: float = 0.42,
 ) -> bytes:
     """
     Build a full-height scratchpad background:
@@ -894,7 +895,7 @@ def _question_bg_png(
     """
     # How much of the pad height we're willing to use for the question content.
     # The rest stays blank for working.
-    CONTENT_MAX = int(height_px * 0.42)
+    CONTENT_MAX = int(height_px * float(content_ratio))
 
     def _render(scale: float) -> tuple[Image.Image, int]:
         img = Image.new("RGBA", (width_px, height_px), (255, 255, 255, 255))
@@ -1037,18 +1038,19 @@ def _call_st_canvas_compat(*, _bg_img=None, _bg_bytes: bytes | None = None, **ba
     return st_canvas(**base_kwargs)
 
 def _render_canvas(slot: str, q) -> None:
-    """Per-question scratchpad with embedded question as a fixed background image.
+    """Per-question scratchpad with the question embedded at the top.
 
-    Uses a lightweight HTML/JS canvas overlay (via components.html) instead of
-    streamlit-drawable-canvas background_image, which is unreliable on some
-    Streamlit Cloud builds.
+    This uses a lightweight HTML/JS drawing layer (components.html) so we can
+    reliably show a question image background on Streamlit Cloud.
     """
-    # Default height: +25% from previous tall pad (728 -> 910)
-    DEFAULT_H = 1140
-    STEP = 360
-    MIN_H = 760
-    MAX_H = 2200
-    CANVAS_W = 700  # keep width consistent
+    # Taller by default (working space), but not so tall that it distorts the embedded image.
+    DEFAULT_H = 1020
+    STEP = 420   # make zoom clearly noticeable
+    MIN_H = 720
+    MAX_H = 2400
+
+    # Internal render width (higher = crisper when downscaled). Display is responsive.
+    CANVAS_W = 900
 
     h_key = f"canvas_h__{slot}"
     if h_key not in st.session_state:
@@ -1100,9 +1102,11 @@ def _render_canvas(slot: str, q) -> None:
     ui_scale = float(st.session_state.get("ui_scale", 3.0))
     height_px = int(st.session_state[h_key])
 
-    # Embedded question scale is intentionally smaller than the page ui_scale,
-    # so the question doesn't eat the scratchpad workspace.
-    embed_scale = max(0.90, min(1.60, ui_scale * 0.55))
+    # Embedded question scale: responds to ui_scale, but much more gently.
+    embed_scale = max(0.80, min(1.20, ui_scale * 0.35))
+
+    # Render ONLY the question band (so zoom mostly changes blank working space).
+    q_band_h = int(max(380, min(720, 520 * embed_scale)))
 
     bg_bytes = _question_bg_png(
         prompt=q.prompt,
@@ -1110,31 +1114,33 @@ def _render_canvas(slot: str, q) -> None:
         diagram_png=getattr(q, "diagram_png", None),
         embed_scale=embed_scale,
         width_px=CANVAS_W,
-        height_px=height_px,
+        height_px=q_band_h,
+        content_ratio=0.98,  # use almost the full band height for the question
     )
     bg_b64 = base64.b64encode(bg_bytes).decode("ascii")
 
-    # Use a localStorage key that changes when the question changes
-    ls_key = f"mw_pad::{slot}::{int(st.session_state[ver_key])}::{getattr(q, 'qid', '')}"
+    # Storage key stays stable for the question; DOM id includes height so zoom forces a redraw.
+    storage_key = f"mw_pad::{slot}::{int(st.session_state[ver_key])}::{getattr(q, 'qid', '')}"
+    dom_id = f"{storage_key}__h{height_px}"
 
-    # HTML scratchpad: background image + transparent drawing canvas overlay.
-    # Drawing is stored in localStorage as a PNG dataURL, so reruns/refresh keep the ink.
     html_block = f"""
-<div id="{ls_key}" style="width:100%; max-width:{CANVAS_W}px; height:{height_px}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
-  <img id="bg" src="data:image/png;base64,{bg_b64}" style="position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; user-select:none;" />
-  <canvas id="draw" width="{CANVAS_W}" height="{height_px}" style="position:absolute; left:0; top:0; width:100%; height:100%; touch-action:none;"></canvas>
+<div id="{dom_id}" style="width:100%; height:{height_px}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
+  <img src="data:image/png;base64,{bg_b64}"
+       style="position:absolute; left:0; top:0; width:100%; height:auto; pointer-events:none; user-select:none;" />
+  <canvas id="draw" width="{CANVAS_W}" height="{height_px}"
+          style="position:absolute; left:0; top:0; width:100%; height:100%; touch-action:none;"></canvas>
 </div>
 <script>
 (function(){{
-  const KEY = {json.dumps(ls_key)};
-  const root = document.getElementById({json.dumps(ls_key)});
+  const STORAGE = {json.dumps(storage_key)};
+  const root = document.getElementById({json.dumps(dom_id)});
   if(!root) return;
   const canvas = root.querySelector('#draw');
   const ctx = canvas.getContext('2d');
 
-  // Restore previous ink layer
+  // Restore previous ink layer (PNG dataURL)
   try {{
-    const saved = window.localStorage.getItem(KEY);
+    const saved = window.localStorage.getItem(STORAGE);
     if(saved) {{
       const img = new Image();
       img.onload = () => {{ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); }};
@@ -1171,7 +1177,7 @@ def _render_canvas(slot: str, q) -> None:
   function save(){{
     try {{
       const url = canvas.toDataURL('image/png');
-      window.localStorage.setItem(KEY, url);
+      window.localStorage.setItem(STORAGE, url);
     }} catch(e){{}}
   }}
 
@@ -1206,7 +1212,7 @@ def _render_canvas(slot: str, q) -> None:
 }})();
 </script>
 """
-    components.html(html_block, height=height_px + 6)
+    components.html(html_block, height=height_px + 8)
 
 
 # ---------------- Practice mode ----------------
