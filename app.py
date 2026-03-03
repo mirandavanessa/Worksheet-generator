@@ -1049,10 +1049,11 @@ def _render_canvas(slot: str, q) -> None:
     reliably show a question image background on Streamlit Cloud.
     """
     # Taller by default (more working space). Height-zoom must be visibly effective.
-    DEFAULT_H = 1500
-    STEP = 600
-    MIN_H = 900
-    MAX_H = 3200
+    # Larger default working space (as requested) and a step size that is clearly noticeable.
+    DEFAULT_H = 2100
+    STEP = 800
+    MIN_H = 1200
+    MAX_H = 4500
 
     # Internal render width (higher = crisper when downscaled). Display is responsive.
     CANVAS_W = 900
@@ -1134,7 +1135,12 @@ def _render_canvas(slot: str, q) -> None:
     storage_key = f"mw_pad::{slot}::{int(st.session_state[ver_key])}::{getattr(q, 'qid', '')}"
     dom_id = f"{storage_key}__h{height_px}"
 
-    html_block = f"""
+    # NOTE: components.html does not accept a `key=` argument.
+    # To force Streamlit to refresh the iframe when height/version/mode changes,
+    # embed a small nonce comment that changes whenever the state changes.
+    nonce = f"{slot}__v{int(st.session_state[ver_key])}__h{height_px}__m{mode}"
+
+    html_block = f"""<!-- {nonce} -->
 <style>html,body{{margin:0;padding:0;background:#ffffff;}}</style>
 <div id="{dom_id}" style="width:100%; height:{height_px}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
   <img src="data:image/png;base64,{bg_b64}"
@@ -1145,6 +1151,9 @@ def _render_canvas(slot: str, q) -> None:
 <script>
 (function(){{
   const STORAGE = {json.dumps(storage_key)};
+  // Prefer parent localStorage so drawings persist even if Streamlit remounts this iframe.
+  // (iPad/Safari can treat iframe storage as ephemeral.)
+  const LS = (window.parent && window.parent.localStorage) ? window.parent.localStorage : window.localStorage;
   const root = document.getElementById({json.dumps(dom_id)});
   if(!root) return;
   const canvas = root.querySelector('#draw');
@@ -1152,7 +1161,7 @@ def _render_canvas(slot: str, q) -> None:
 
   // Restore previous ink layer (PNG dataURL)
   try {{
-    const saved = window.localStorage.getItem(STORAGE);
+    const saved = LS.getItem(STORAGE);
     if(saved) {{
       const img = new Image();
       img.onload = () => {{ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); }};
@@ -1189,7 +1198,7 @@ def _render_canvas(slot: str, q) -> None:
   function save(){{
     try {{
       const url = canvas.toDataURL('image/png');
-      window.localStorage.setItem(STORAGE, url);
+      LS.setItem(STORAGE, url);
     }} catch(e){{}}
   }}
 
@@ -1224,11 +1233,9 @@ def _render_canvas(slot: str, q) -> None:
 }})();
 </script>
 """
-    # IMPORTANT: provide a key so Streamlit fully re-mounts the component when height changes.
     components.html(
         html_block,
         height=height_px + 8,
-        key=f"pad__{slot}__v{int(st.session_state[ver_key])}__h{height_px}",
     )
 
 
