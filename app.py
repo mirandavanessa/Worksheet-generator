@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.37-zoom-key-wipe-eraser"
+BUILD_ID = "v39.42_prompt_timerfix"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -764,6 +764,25 @@ def _inject_overlay_timer():
     render();
   }
 
+  function setMS(m, s){
+    // Set minutes/seconds from +/- buttons; normalise and apply immediately.
+    m = parseInt(m||0, 10);
+    s = parseInt(s||0, 10);
+    if (!Number.isFinite(m) || m < 0) m = 0;
+    if (!Number.isFinite(s)) s = 0;
+
+    // Normalise seconds with carry/borrow
+    while (s < 0 && m > 0){ m -= 1; s += 60; }
+    if (s < 0){ s = 0; }
+    if (s >= 60){ m += Math.floor(s/60); s = s % 60; }
+
+    minInput.value = String(m);
+    secInput.value = String(s);
+
+    // Apply as a reset (keeps behaviour predictable on iPad)
+    applyDurationFromInputs();
+  }
+
   function applyDurationFromInputs(){
     let m = parseInt(minInput.value || "0", 10);
     let s = parseInt(secInput.value || "0", 10);
@@ -952,7 +971,7 @@ def _question_bg_png(
         max_text_w = width_px - 2 * pad
 
         # Prompt (keep footprint similar to the old on-page prompt)
-        prompt_font = _pil_font(max(14, int(32 * scale)), bold=True)
+        prompt_font = _pil_font(max(14, int(38 * scale)), bold=True)
         for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
             draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
             y += int(prompt_font.size * 1.18)
