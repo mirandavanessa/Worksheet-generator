@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.27-embed-question-scratchpad-canvasfix"
+BUILD_ID = "v39.33-html-scratchpad-embed-fit"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -877,7 +877,7 @@ def _question_bg_png(
     prompt: str,
     latex: str,
     diagram_png: bytes | None,
-    ui_scale: float,
+    embed_scale: float,
     width_px: int,
     height_px: int,
 ) -> bytes:
@@ -885,51 +885,73 @@ def _question_bg_png(
     Build a full-height scratchpad background:
     - question content at the top (prompt + latex + diagram)
     - blank space underneath for working
+
+    Notes:
+    - `embed_scale` is intentionally decoupled from the main page `ui_scale` so the
+      embedded question doesn't become huge.
+    - We auto-shrink to ensure the whole question fits into the top portion of
+      the pad, leaving plenty of blank space underneath.
     """
-    img = Image.new("RGBA", (width_px, height_px), (255, 255, 255, 255))
-    draw = ImageDraw.Draw(img)
+    # How much of the pad height we're willing to use for the question content.
+    # The rest stays blank for working.
+    CONTENT_MAX = int(height_px * 0.42)
 
-    pad = int(14 * ui_scale)
-    y = pad
-    max_text_w = width_px - 2 * pad
+    def _render(scale: float) -> tuple[Image.Image, int]:
+        img = Image.new("RGBA", (width_px, height_px), (255, 255, 255, 255))
+        draw = ImageDraw.Draw(img)
 
-    # Prompt
-    prompt_font = _pil_font(max(12, int(18 * ui_scale)))
-    for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
-        draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
-        y += int(prompt_font.size * 1.20)
+        pad = max(10, int(14 * scale))
+        y = pad
+        max_text_w = width_px - 2 * pad
 
-    y += int(8 * ui_scale)
+        # Prompt (keep footprint similar to the old on-page prompt)
+        prompt_font = _pil_font(max(12, int(18 * scale)))
+        for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
+            draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
+            y += int(prompt_font.size * 1.18)
 
-    # LaTeX
-    if latex and latex.strip():
-        latex_img = _latex_to_rgba(latex.strip(), fontsize=max(14, int(22 * ui_scale)))
-        if latex_img.width > max_text_w:
-            s = max_text_w / float(latex_img.width)
-            new_w = max(1, int(latex_img.width * s))
-            new_h = max(1, int(latex_img.height * s))
-            latex_img = latex_img.resize((new_w, new_h), Image.LANCZOS)
-        img.alpha_composite(latex_img, dest=(pad, y))
-        y += latex_img.height + int(10 * ui_scale)
+        y += int(8 * scale)
 
-    # Diagram (optional)
-    if diagram_png:
-        d = Image.open(io.BytesIO(diagram_png)).convert("RGBA")
+        # LaTeX (optional)
+        if latex and latex.strip():
+            latex_img = _latex_to_rgba(latex.strip(), fontsize=max(14, int(22 * scale)))
+            if latex_img.width > max_text_w:
+                s = max_text_w / float(latex_img.width)
+                new_w = max(1, int(latex_img.width * s))
+                new_h = max(1, int(latex_img.height * s))
+                latex_img = latex_img.resize((new_w, new_h), Image.LANCZOS)
+            img.alpha_composite(latex_img, dest=(pad, y))
+            y += latex_img.height + int(10 * scale)
 
-        # Scale diagram to fit width; cap height so it doesn't eat the workspace.
-        # Scale cap gently with ui_scale (but not 1:1).
-        max_diag_h = int(260 * min(max(ui_scale, 1.0), 2.0))
-        scale = min(max_text_w / float(d.width), max_diag_h / float(d.height), 1.0)
-        new_w = max(1, int(d.width * scale))
-        new_h = max(1, int(d.height * scale))
-        d = d.resize((new_w, new_h), Image.LANCZOS)
-        img.alpha_composite(d, dest=(pad, y))
-        y += d.height + int(8 * ui_scale)
+        # Diagram (optional)
+        if diagram_png:
+            d = Image.open(io.BytesIO(diagram_png)).convert("RGBA")
+            # Cap diagram height so it doesn't eat the workspace.
+            max_diag_h = int(250 * min(max(scale, 1.0), 1.6))
+            s = min(max_text_w / float(d.width), max_diag_h / float(d.height), 1.0)
+            new_w = max(1, int(d.width * s))
+            new_h = max(1, int(d.height * s))
+            d = d.resize((new_w, new_h), Image.LANCZOS)
+            img.alpha_composite(d, dest=(pad, y))
+            y += d.height + int(8 * scale)
+
+        return img, y
+
+    # Start with the requested scale, then shrink if needed so the whole question
+    # fits within the CONTENT_MAX band.
+    scale = max(0.65, float(embed_scale))
+    for _ in range(4):
+        img, used_y = _render(scale)
+        if used_y <= CONTENT_MAX:
+            break
+        # Reduce proportionally (keep a small safety margin)
+        scale = max(0.65, scale * (CONTENT_MAX / float(used_y)) * 0.97)
 
     img = img.convert("RGB")
     out = io.BytesIO()
     img.save(out, format="PNG")
     return out.getvalue()
+
 
 
 def _png_bytes_to_data_url(png_bytes: bytes) -> str:
@@ -1023,7 +1045,7 @@ def _render_canvas(slot: str, q) -> None:
     """
     # Default height: +25% from previous tall pad (728 -> 910)
     DEFAULT_H = 910
-    STEP = 150
+    STEP = 240
     MIN_H = 620
     MAX_H = 1600
     CANVAS_W = 700  # keep width consistent
@@ -1078,11 +1100,15 @@ def _render_canvas(slot: str, q) -> None:
     ui_scale = float(st.session_state.get("ui_scale", 3.0))
     height_px = int(st.session_state[h_key])
 
+    # Embedded question scale is intentionally smaller than the page ui_scale,
+    # so the question doesn't eat the scratchpad workspace.
+    embed_scale = max(0.90, min(1.60, ui_scale * 0.55))
+
     bg_bytes = _question_bg_png(
         prompt=q.prompt,
         latex=q.latex,
         diagram_png=getattr(q, "diagram_png", None),
-        ui_scale=ui_scale,
+        embed_scale=embed_scale,
         width_px=CANVAS_W,
         height_px=height_px,
     )
