@@ -87,22 +87,17 @@ def _text_bbox(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) 
         return draw.textsize(text, font=font)
 
 
-def _label(draw: ImageDraw.ImageDraw, xy: Tuple[float, float], text: str, font: ImageFont.ImageFont, pad: int = 3):
-    """Draw a label with a small background box so lines do not show through."""
+def _label(draw: ImageDraw.ImageDraw, xy: Tuple[float, float], text: str, font: ImageFont.ImageFont):
+    """Draw plain label text (GCSE worksheet style: no arrowheads, no dimension lines)."""
     x, y = xy
-    w, h = _text_bbox(draw, text, font)
-    x0 = int(round(x))
-    y0 = int(round(y))
-    draw.rectangle([x0 - pad, y0 - pad, x0 + w + pad, y0 + h + pad], fill=_BG)
-    draw.text((x0, y0), text, fill=_FG, font=font)
+    draw.text((int(round(x)), int(round(y))), text, fill=_FG, font=font)
 
 
-def _label_center(draw: ImageDraw.ImageDraw, center: Tuple[float, float], text: str,
-                  font: ImageFont.ImageFont, pad: int = 3):
-    """Draw a label centred at (x, y) with a small background box."""
+def _label_center(draw: ImageDraw.ImageDraw, center: Tuple[float, float], text: str, font: ImageFont.ImageFont):
+    """Draw plain label text centred at (x, y)."""
     cx, cy = center
     w, h = _text_bbox(draw, text, font)
-    _label(draw, (cx - w / 2, cy - h / 2), text, font, pad=pad)
+    _label(draw, (cx - w / 2, cy - h / 2), text, font)
 
 
 
@@ -188,7 +183,10 @@ def _img_bytes(img: Image.Image) -> bytes:
 
 
 def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str) -> bytes:
-    """Rectilinear notch shape with clear GCSE-style labels (no arrow dimension lines)."""
+    """Rectilinear notch shape labelled in the same style as the provided EPP examples.
+
+    Labels are placed adjacent to the relevant edges (no arrows / no dimension lines).
+    """
     img = Image.new("RGB", (580, 280), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(27)
@@ -211,31 +209,31 @@ def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str)
     p7 = (x0, y1)
 
     pts = [p0, p1, p2, p3, p4, p5, p6, p7, p0]
-    draw.line(pts, fill=_FG, width=4)
+    draw.line(pts, fill=_FG, width=3)
 
-    # Labels placed close to the relevant edges (outside when possible) with a small box
-    # so lines don't show through. This matches typical GCSE worksheet diagrams.
-    _label_center(draw, ((p0[0] + p1[0]) / 2, y0 + 18), W, font)                         # bottom width
-    _label_center(draw, (x1 + 28, (p1[1] + p2[1]) / 2), H, font)                          # right height
-    _label_center(draw, ((p7[0] + p6[0]) / 2, y1 - 18), L1, font)                         # top-left segment
-    _label_center(draw, ((p3[0] + p2[0]) / 2, y1 - 18), L2, font)                         # top-right segment
-    _label_center(draw, ((p5[0] + p4[0]) / 2, p5[1] + 18), w, font)                       # notch bottom
-    _label_center(draw, (p3[0] + 26, (p3[1] + p4[1]) / 2), d, font)                       # notch depth
+    # Labels (no boxes) – mimic the EPP look: numbers placed near edges.
+    _label_center(draw, ((p0[0] + p1[0]) / 2, y0 + 20), W, font)                         # bottom width
+    _label_center(draw, (x0 - 38, (p7[1] + p0[1]) / 2), H, font)                          # left height
+    _label_center(draw, ((p7[0] + p6[0]) / 2, y1 - 22), L1, font)                         # top-left segment
+    _label_center(draw, ((p3[0] + p2[0]) / 2, y1 - 22), L2, font)                         # top-right segment
+    _label_center(draw, ((p5[0] + p4[0]) / 2, p5[1] - 22), w, font)                       # notch bottom (inside)
+    _label_center(draw, (p3[0] - 28, (p3[1] + p4[1]) / 2), d, font)                       # notch depth (inside)
 
     return _img_bytes(img)
 
 def _rectangle_diagram(L: str, W: str) -> bytes:
-    """Axis-aligned rectangle with simple outside labels (no arrows)."""
+    """Axis-aligned rectangle with GCSE worksheet-style labels (no arrows)."""
     img = Image.new("RGB", (420, 220), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(27)
 
     x0, y0 = 70, 180
     x1, y1 = 350, 60
-    draw.rectangle([x0, y1, x1, y0], outline=_FG, width=4)
+    draw.rectangle([x0, y1, x1, y0], outline=_FG, width=3)
 
-    _label_center(draw, ((x0 + x1) / 2, y0 + 18), L, font)                 # length
-    _label_center(draw, (x1 + 24, (y0 + y1) / 2), W, font)                 # width
+    # Match the guide: horizontal label above, vertical label on the left.
+    _label_center(draw, ((x0 + x1) / 2, y1 - 22), L, font)                 # length (top)
+    _label_center(draw, (x0 - 28, (y0 + y1) / 2), W, font)                 # width (left)
 
     return _img_bytes(img)
 
@@ -249,7 +247,7 @@ def _triangle_diagram(base: str, height: str) -> bytes:
     B = (340, 190)
     C = (260, 70)
 
-    draw.line([A, B, C, A], fill=_FG, width=4)
+    draw.line([A, B, C, A], fill=_FG, width=3)
 
     foot = (C[0], A[1])
     _dashed_line(draw, C, foot, dash=7, gap=6, lw=2)
@@ -257,8 +255,9 @@ def _triangle_diagram(base: str, height: str) -> bytes:
     ra = 10
     draw.line([(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)], fill=_FG, width=2)
 
-    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 18), base, font)                  # base
-    _label_center(draw, (foot[0] + 26, (C[1] + foot[1]) / 2), height, font)          # height
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 20), base, font)                  # base
+    # Height label inside the triangle, adjacent to the dashed height line
+    _label_center(draw, (foot[0] + 32, (C[1] + foot[1]) / 2), height, font)
 
     return _img_bytes(img)
 
@@ -273,7 +272,7 @@ def _parallelogram_diagram(base: str, height: str) -> bytes:
     D = (70, 80)
     C = (320, 80)
 
-    draw.line([A, B, C, D, A], fill=_FG, width=4)
+    draw.line([A, B, C, D, A], fill=_FG, width=3)
 
     foot = (D[0], A[1])
     _dashed_line(draw, D, foot, dash=7, gap=6, lw=2)
@@ -281,8 +280,9 @@ def _parallelogram_diagram(base: str, height: str) -> bytes:
     ra = 10
     draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
 
-    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 18), base, font)                   # base
-    _label_center(draw, (foot[0] - 26, (D[1] + foot[1]) / 2), height, font)           # height (left side)
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 20), base, font)                   # base
+    # Height label positioned just inside near the dashed line
+    _label_center(draw, (foot[0] + 34, (D[1] + foot[1]) / 2), height, font)
 
     return _img_bytes(img)
 
@@ -297,7 +297,7 @@ def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
     D = (160, 80)
     C = (320, 80)
 
-    draw.line([A, B, C, D, A], fill=_FG, width=4)
+    draw.line([A, B, C, D, A], fill=_FG, width=3)
 
     foot = (D[0], A[1])
     _dashed_line(draw, D, foot, dash=7, gap=6, lw=2)
@@ -305,9 +305,10 @@ def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
     ra = 10
     draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
 
-    _label_center(draw, ((D[0] + C[0]) / 2, D[1] - 18), a, font)                      # top
-    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 18), b, font)                      # bottom
-    _label_center(draw, (foot[0] - 28, (D[1] + foot[1]) / 2), h, font)                # height
+    _label_center(draw, ((D[0] + C[0]) / 2, D[1] - 22), a, font)                      # top
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 20), b, font)                      # bottom
+    # Height label inside near the dashed height
+    _label_center(draw, (foot[0] + 34, (D[1] + foot[1]) / 2), h, font)
 
     return _img_bytes(img)
 
@@ -322,7 +323,7 @@ def _kite_diagram(d1: str, d2: str) -> bytes:
     bottom = (210, 210)
     left = (90, 130)
 
-    draw.line([top, right, bottom, left, top], fill=_FG, width=4)
+    draw.line([top, right, bottom, left, top], fill=_FG, width=3)
 
     # diagonals (dashed)
     _dashed_line(draw, top, bottom, dash=7, gap=6, lw=2)
