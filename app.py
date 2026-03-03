@@ -926,6 +926,7 @@ def _question_bg_png(
         img.alpha_composite(d, dest=(pad, y))
         y += d.height + int(8 * ui_scale)
 
+    img = img.convert("RGB")
     out = io.BytesIO()
     img.save(out, format="PNG")
     return out.getvalue()
@@ -998,7 +999,7 @@ def _render_canvas(slot: str, q) -> None:
         width_px=CANVAS_W,
         height_px=int(st.session_state[h_key]),
     )
-    bg_img = Image.open(io.BytesIO(bg_bytes)).convert("RGBA")
+    bg_img = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
 
     st_canvas(
         fill_color="rgba(255, 255, 255, 0)",
