@@ -932,6 +932,88 @@ def _question_bg_png(
     return out.getvalue()
 
 
+def _png_bytes_to_data_url(png_bytes: bytes) -> str:
+    b64 = base64.b64encode(png_bytes).decode("ascii")
+    return f"data:image/png;base64,{b64}"
+
+def _call_st_canvas_compat(*, _bg_img=None, _bg_bytes: bytes | None = None, **base_kwargs):
+    """Call st_canvas with a background image across drawable-canvas variants.
+
+    Different package versions use different kwarg names. We try a small set of
+    combinations and fall back gracefully.
+    """
+    variants = []
+
+    if _bg_img is not None:
+        variants += [
+            {"background_image": _bg_img},
+            {"background_image": _bg_img, "background_color": "#FFFFFF"},
+            {"background_image": _bg_img, "backgroundColor": "#FFFFFF"},
+            {"backgroundImage": _bg_img},
+            {"backgroundImage": _bg_img, "background_color": "#FFFFFF"},
+            {"backgroundImage": _bg_img, "backgroundColor": "#FFFFFF"},
+        ]
+
+    if _bg_bytes is not None:
+        try:
+            url = _png_bytes_to_data_url(_bg_bytes)
+            init = {
+                "version": "4.4.0",
+                "objects": [
+                    {
+                        "type": "image",
+                        "left": 0,
+                        "top": 0,
+                        "scaleX": 1,
+                        "scaleY": 1,
+                        "opacity": 1,
+                        "src": url,
+                        "crossOrigin": "anonymous",
+                        "selectable": False,
+                        "evented": False,
+                        "hasControls": False,
+                        "hasBorders": False,
+                        "lockMovementX": True,
+                        "lockMovementY": True,
+                        "lockScalingX": True,
+                        "lockScalingY": True,
+                        "lockRotation": True,
+                    }
+                ],
+                "background": "#FFFFFF",
+            }
+            variants += [
+                {"background_image_url": url},
+                {"background_image_url": url, "background_color": "#FFFFFF"},
+                {"background_image_url": url, "backgroundColor": "#FFFFFF"},
+                {"backgroundImageUrl": url},
+                {"backgroundImageUrl": url, "background_color": "#FFFFFF"},
+                {"backgroundImageUrl": url, "backgroundColor": "#FFFFFF"},
+                {"initial_drawing": init},
+                {"initialDrawing": init},
+            ]
+        except Exception:
+            pass
+
+    variants += [
+        {"background_color": "#FFFFFF"},
+        {"backgroundColor": "#FFFFFF"},
+        {},  # final attempt with no background args
+    ]
+
+    last_type_error: TypeError | None = None
+    for extra in variants:
+        try:
+            return st_canvas(**base_kwargs, **extra)
+        except TypeError as e:
+            last_type_error = e
+            continue
+
+    # If everything failed, raise the last TypeError (most informative).
+    if last_type_error:
+        raise last_type_error
+    return st_canvas(**base_kwargs)
+
 def _render_canvas(slot: str, q) -> None:
     """Per-question scratchpad with embedded question background and height-zoom controls."""
     if not _CANVAS_OK:
@@ -1001,16 +1083,16 @@ def _render_canvas(slot: str, q) -> None:
     )
     bg_img = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
 
-    st_canvas(
+    _call_st_canvas_compat(
         fill_color="rgba(255, 255, 255, 0)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
-        background_color="#FFFFFF",
-        background_image=bg_img,
         height=int(st.session_state[h_key]),
         width=CANVAS_W,
         drawing_mode="freedraw",
         key=f"canvas__{slot}__{int(st.session_state[ver_key])}",
+        _bg_img=bg_img,
+        _bg_bytes=bg_bytes,
     )
 
 
