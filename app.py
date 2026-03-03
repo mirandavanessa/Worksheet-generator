@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.33-html-scratchpad-embed-fit"
+BUILD_ID = "v39.34-html-scratchpad-widthfix-height"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -1044,10 +1044,10 @@ def _render_canvas(slot: str, q) -> None:
     Streamlit Cloud builds.
     """
     # Default height: +25% from previous tall pad (728 -> 910)
-    DEFAULT_H = 910
-    STEP = 240
-    MIN_H = 620
-    MAX_H = 1600
+    DEFAULT_H = 1140
+    STEP = 360
+    MIN_H = 760
+    MAX_H = 2200
     CANVAS_W = 700  # keep width consistent
 
     h_key = f"canvas_h__{slot}"
@@ -1120,9 +1120,9 @@ def _render_canvas(slot: str, q) -> None:
     # HTML scratchpad: background image + transparent drawing canvas overlay.
     # Drawing is stored in localStorage as a PNG dataURL, so reruns/refresh keep the ink.
     html_block = f"""
-<div id="{ls_key}" style="width:{CANVAS_W}px; height:{height_px}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
-  <img id="bg" src="data:image/png;base64,{bg_b64}" style="position:absolute; left:0; top:0; width:{CANVAS_W}px; height:{height_px}px; pointer-events:none; user-select:none;" />
-  <canvas id="draw" width="{CANVAS_W}" height="{height_px}" style="position:absolute; left:0; top:0; touch-action:none;"></canvas>
+<div id="{ls_key}" style="width:100%; max-width:{CANVAS_W}px; height:{height_px}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
+  <img id="bg" src="data:image/png;base64,{bg_b64}" style="position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; user-select:none;" />
+  <canvas id="draw" width="{CANVAS_W}" height="{height_px}" style="position:absolute; left:0; top:0; width:100%; height:100%; touch-action:none;"></canvas>
 </div>
 <script>
 (function(){{
