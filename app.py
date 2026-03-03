@@ -493,7 +493,7 @@ def _inject_overlay_timer():
       position:fixed;
       top: 3.45rem;
       left:50%;
-      transform: translateX(-50%);
+      transform: translateX(-75%);
       z-index:999999;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       user-select:none;
