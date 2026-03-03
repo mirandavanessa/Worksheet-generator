@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.42_prompt_timerfix"
+BUILD_ID = "v39.43-diagramlabels-padheight"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -1119,7 +1119,7 @@ def _render_canvas(slot: str, q) -> None:
     Zoom does NOT change the scratchpad width/height.
     """
     # Scratchpad height (reduced ~30% vs prior large default)
-    PAD_H = 1470
+    PAD_H = 882
 
     # Internal render width (higher = crisper when downscaled). Display is responsive.
     CANVAS_W = 900

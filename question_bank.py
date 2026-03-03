@@ -78,7 +78,7 @@ _BG = (255, 255, 255)
 _FG = (0, 0, 0)
 
 
-def _default_font(size: int = 18):
+def _default_font(size: int = 27):
     try:
         return ImageFont.truetype("DejaVuSans.ttf", size=size)
     except Exception:
@@ -95,7 +95,7 @@ def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str)
     """Rectilinear notch shape with labels. White background, black lines."""
     img = Image.new("RGB", (520, 240), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(18)
+    font = _default_font(27)
 
     x0, y0 = 60, 200
     x1, y1 = 460, 40
@@ -144,7 +144,7 @@ def _rectangle_diagram(L: str, W: str) -> bytes:
     """Axis-aligned rectangle labelled with length (bottom) and width (right)."""
     img = Image.new("RGB", (420, 220), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(18)
+    font = _default_font(27)
 
     x0, y0 = 70, 180
     x1, y1 = 350, 60
@@ -159,7 +159,7 @@ def _triangle_diagram(base: str, height: str) -> bytes:
     """Triangle with a height dropped to the base (perpendicular)."""
     img = Image.new("RGB", (420, 240), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(18)
+    font = _default_font(27)
 
     A = (80, 190)
     B = (340, 190)
@@ -185,7 +185,7 @@ def _triangle_diagram(base: str, height: str) -> bytes:
 def _parallelogram_diagram(base: str, height: str) -> bytes:
     img = Image.new("RGB", (460, 240), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(18)
+    font = _default_font(27)
 
     A = (110, 190)
     B = (360, 190)
@@ -209,7 +209,7 @@ def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
     """Trapezium with parallel sides a (top) and b (bottom) and height h."""
     img = Image.new("RGB", (480, 260), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(18)
+    font = _default_font(27)
 
     A = (120, 200)
     B = (380, 200)
@@ -234,7 +234,7 @@ def _kite_diagram(d1: str, d2: str) -> bytes:
     """Kite/rhombus with diagonals labelled."""
     img = Image.new("RGB", (420, 260), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(18)
+    font = _default_font(27)
 
     top = (210, 60)
     right = (330, 130)
