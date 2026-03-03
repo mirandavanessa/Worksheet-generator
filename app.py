@@ -971,10 +971,10 @@ def _question_bg_png(
         max_text_w = width_px - 2 * pad
 
         # Prompt (keep footprint similar to the old on-page prompt)
-        prompt_font = _pil_font(max(14, int(38 * scale)), bold=True)
+        prompt_font = _pil_font(max(14, int(52 * scale)), bold=True)
         for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
             draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
-            y += int(prompt_font.size * 1.18)
+            y += int(prompt_font.size * 1.22)
 
         y += int(8 * scale)
 
@@ -993,10 +993,10 @@ def _question_bg_png(
         if diagram_png:
             d = Image.open(io.BytesIO(diagram_png)).convert("RGBA")
             # Cap diagram height so it doesn't eat the workspace.
-            max_diag_h = int(340 * scale)
-            max_diag_h = max(280, min(max_diag_h, 700))
+            max_diag_h = int(460 * scale)
+            max_diag_h = max(320, min(max_diag_h, 820))
             # Allow upscaling so the zoom buttons enlarge diagrams too (cap to reduce pixelation).
-            s = min(max_text_w / float(d.width), max_diag_h / float(d.height), 2.4)
+            s = min(max_text_w / float(d.width), max_diag_h / float(d.height), 3.0)
             new_w = max(1, int(d.width * s))
             new_h = max(1, int(d.height * s))
             d = d.resize((new_w, new_h), Image.LANCZOS)
@@ -1151,10 +1151,10 @@ def _render_canvas(slot: str, q) -> None:
 
     # Zoom changes content scale (not pad size)
     if cZm.button("−", key=f"zout__{slot}", type="secondary"):
-        st.session_state[z_key] = max(0.80, round(float(st.session_state[z_key]) - 0.20, 2))
+        st.session_state[z_key] = max(0.75, round(float(st.session_state[z_key]) - 0.25, 2))
         st.rerun()
     if cZp.button("+", key=f"zin__{slot}", type="secondary"):
-        st.session_state[z_key] = min(1.60, round(float(st.session_state[z_key]) + 0.20, 2))
+        st.session_state[z_key] = min(2.20, round(float(st.session_state[z_key]) + 0.25, 2))
         st.rerun()
     if cZr.button("R", key=f"zreset__{slot}", type="secondary"):
         st.session_state[z_key] = 1.0
@@ -1185,11 +1185,11 @@ def _render_canvas(slot: str, q) -> None:
     zoom = float(st.session_state.get(z_key, 1.0))
 
     # Base embed scale follows ui_scale gently; zoom multiplies to enlarge lettering/diagram.
-    base_embed = max(0.85, min(1.25, ui_scale * 0.35))
-    embed_scale = max(0.70, min(1.60, base_embed * zoom))
+    base_embed = max(0.95, min(1.40, ui_scale * 0.40))
+    embed_scale = max(0.80, min(2.20, base_embed * zoom))
 
     # Question band height grows with embed scale so zoom isn't cancelled by auto-fit.
-    q_band_h = int(max(440, min(int(PAD_H * 0.78), 620 * embed_scale)))
+    q_band_h = int(max(440, min(int(PAD_H * 0.92), int(620 * embed_scale))))
 
     bg_bytes = _question_bg_png(
         prompt=q.prompt,
@@ -1198,7 +1198,7 @@ def _render_canvas(slot: str, q) -> None:
         embed_scale=embed_scale,
         width_px=CANVAS_W,
         height_px=q_band_h,
-        content_ratio=0.98,
+        content_ratio=0.99,
     )
     bg_b64 = base64.b64encode(bg_bytes).decode("ascii")
 
