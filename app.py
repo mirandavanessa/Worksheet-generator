@@ -541,6 +541,24 @@ def _inject_overlay_timer():
       opacity: 0.85;
       margin-bottom: 0.12rem;
     }
+
+    .mw-incrow{
+      display:flex;
+      gap:0.35rem;
+      margin-bottom:0.25rem;
+    }
+    .mw-incbtn{
+      flex: 1 1 auto;
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(0,0,0,0.18);
+      border-radius: 10px;
+      color:#000;
+      padding: 0.18rem 0.0rem;
+      font-size: 1.05rem;
+      line-height: 1;
+      cursor:pointer;
+    }
+    .mw-incbtn:active{ transform: translateY(1px); }
     #mw-timer-row{
       display:flex;
       gap:0.45rem;
@@ -598,11 +616,17 @@ def _inject_overlay_timer():
     <div id="mw-timer-panel" aria-label="Timer controls">
       <div id="mw-timer-row">
         <div style="flex:1 1 auto">
-          <label>Minutes</label>
+          <div class="mw-incrow">
+            <button id="mw-min-plus" class="mw-incbtn">+</button>
+            <button id="mw-min-minus" class="mw-incbtn">−</button>
+          </div>
           <input id="mw-min" type="number" min="0" max="999" step="1" inputmode="numeric"/>
         </div>
         <div style="flex:1 1 auto">
-          <label>Seconds</label>
+          <div class="mw-incrow">
+            <button id="mw-sec-plus" class="mw-incbtn">+</button>
+            <button id="mw-sec-minus" class="mw-incbtn">−</button>
+          </div>
           <input id="mw-sec" type="number" min="0" max="59" step="1" inputmode="numeric"/>
         </div>
       </div>
@@ -617,6 +641,10 @@ def _inject_overlay_timer():
   const display = doc.getElementById("mw-timer-display");
   const panel = doc.getElementById("mw-timer-panel");
   const minInput = doc.getElementById("mw-min");
+  const minPlus = doc.getElementById("mw-min-plus");
+  const minMinus = doc.getElementById("mw-min-minus");
+  const secPlus = doc.getElementById("mw-sec-plus");
+  const secMinus = doc.getElementById("mw-sec-minus");
   const secInput = doc.getElementById("mw-sec");
   const startBtn = doc.getElementById("mw-start");
   const resetBtn = doc.getElementById("mw-reset");
@@ -765,7 +793,20 @@ def _inject_overlay_timer():
   minInput.addEventListener("change", function(){ if (!running) applyDurationFromInputs(); });
   secInput.addEventListener("change", function(){ if (!running) applyDurationFromInputs(); });
 
-  startBtn.addEventListener("click", function(){
+  
+  // +/- buttons (minutes by 1, seconds by 5)
+  function curMS(){
+    let m = parseInt(minInput.value || "0", 10);
+    let s = parseInt(secInput.value || "0", 10);
+    if (!Number.isFinite(m) || m < 0) m = 0;
+    if (!Number.isFinite(s) || s < 0) s = 0;
+    return [m, s];
+  }
+  if (minPlus) minPlus.addEventListener("click", function(){ const [m,s]=curMS(); setMS(m+1,s); });
+  if (minMinus) minMinus.addEventListener("click", function(){ const [m,s]=curMS(); setMS(m-1,s); });
+  if (secPlus) secPlus.addEventListener("click", function(){ const [m,s]=curMS(); setMS(m, s+5); });
+  if (secMinus) secMinus.addEventListener("click", function(){ const [m,s]=curMS(); setMS(m, s-5); });
+startBtn.addEventListener("click", function(){
     getCtx();
     if (running) pauseTimer();
     else startTimer();
@@ -933,8 +974,10 @@ def _question_bg_png(
         if diagram_png:
             d = Image.open(io.BytesIO(diagram_png)).convert("RGBA")
             # Cap diagram height so it doesn't eat the workspace.
-            max_diag_h = int(250 * min(max(scale, 1.0), 1.6))
-            s = min(max_text_w / float(d.width), max_diag_h / float(d.height), 1.0)
+            max_diag_h = int(250 * scale)
+            max_diag_h = max(220, min(max_diag_h, 520))
+            # Allow upscaling so the zoom buttons enlarge diagrams too (cap to reduce pixelation).
+            s = min(max_text_w / float(d.width), max_diag_h / float(d.height), 2.0)
             new_w = max(1, int(d.width * s))
             new_h = max(1, int(d.height * s))
             d = d.resize((new_w, new_h), Image.LANCZOS)
