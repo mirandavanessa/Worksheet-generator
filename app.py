@@ -1045,51 +1045,57 @@ def _call_st_canvas_compat(*, _bg_img=None, _bg_bytes: bytes | None = None, **ba
 def _render_canvas(slot: str, q) -> None:
     """Per-question scratchpad with the question embedded at the top.
 
-    This uses a lightweight HTML/JS drawing layer (components.html) so we can
-    reliably show a question image background on Streamlit Cloud.
+    Uses an HTML/JS drawing layer (components.html) so the embedded question
+    renders reliably on Streamlit Cloud.
+
+    Controls:
+    - − / + / R : zoom the *question content* (text/LaTeX/diagram) inside the pad
+    - B / P / G : pen colours
+    - E         : "eraser" = white pen (draws in white)
+    - X         : wipe (clear the whole ink layer)
+
+    Zoom does NOT change the scratchpad width/height.
     """
-    # Taller by default (more working space). Height-zoom must be visibly effective.
-    # Larger default working space (as requested) and a step size that is clearly noticeable.
-    DEFAULT_H = 2100
-    STEP = 800
-    MIN_H = 1200
-    MAX_H = 4500
+    # Scratchpad height (reduced ~30% vs prior large default)
+    PAD_H = 1470
 
     # Internal render width (higher = crisper when downscaled). Display is responsive.
     CANVAS_W = 900
 
-    h_key = f"canvas_h__{slot}"
-    if h_key not in st.session_state:
-        st.session_state[h_key] = DEFAULT_H
-
     ver_key = f"canvas_ver__{slot}"
     _set_default(ver_key, 0)
+
+    # Zoom factor (question content only)
+    z_key = f"pad_zoom__{slot}"
+    if z_key not in st.session_state:
+        st.session_state[z_key] = 1.0
 
     mode_key = f"ink__{slot}"
     _set_default(mode_key, "black")
     mode = st.session_state[mode_key]
 
-    # Colours (white theme): black/purple/dark-green + eraser removes strokes
+    # Colours (white theme): black/purple/dark-green + white pen for erasing
     ink_map = {
         "black": "#000000",
         "purple": "#B000FF",
         "green": "#008000",
-        "eraser": "#000000",  # colour unused in eraser mode
+        "white": "#FFFFFF",  # eraser pen
     }
     stroke_color = ink_map.get(mode, "#000000")
-    stroke_width = 12 if mode == "eraser" else 3
+    stroke_width = 14 if mode == "white" else 3
 
     # Controls ABOVE the scratchpad: zoom then ink + eraser + wipe
     cZm, cZp, cZr, cB, cP, cG, cE, cX, _ = st.columns([1, 1, 1, 1, 1, 1, 1, 1, 7])
 
-    if cZm.button("−", key=f"zhm__{slot}", type="secondary"):
-        st.session_state[h_key] = max(MIN_H, int(st.session_state[h_key]) - STEP)
+    # Zoom changes content scale (not pad size)
+    if cZm.button("−", key=f"zout__{slot}", type="secondary"):
+        st.session_state[z_key] = max(0.80, round(float(st.session_state[z_key]) - 0.20, 2))
         st.rerun()
-    if cZp.button("+", key=f"zhp__{slot}", type="secondary"):
-        st.session_state[h_key] = min(MAX_H, int(st.session_state[h_key]) + STEP)
+    if cZp.button("+", key=f"zin__{slot}", type="secondary"):
+        st.session_state[z_key] = min(1.60, round(float(st.session_state[z_key]) + 0.20, 2))
         st.rerun()
-    if cZr.button("R", key=f"zhr__{slot}", type="secondary"):
-        st.session_state[h_key] = DEFAULT_H
+    if cZr.button("R", key=f"zreset__{slot}", type="secondary"):
+        st.session_state[z_key] = 1.0
         st.rerun()
 
     if cB.button("B", key=f"inkB__{slot}", type="secondary"):
@@ -1101,24 +1107,27 @@ def _render_canvas(slot: str, q) -> None:
     if cG.button("G", key=f"inkG__{slot}", type="secondary"):
         st.session_state[mode_key] = "green"
         st.rerun()
+
+    # E = white pen (individual erasing)
     if cE.button("E", key=f"inkE__{slot}", type="secondary"):
-        st.session_state[mode_key] = "black" if st.session_state[mode_key] == "eraser" else "eraser"
+        st.session_state[mode_key] = "black" if st.session_state[mode_key] == "white" else "white"
         st.rerun()
 
-    # Wipe (clear) the whole ink layer (useful in class). Keeps the question background.
+    # Wipe (clear) the whole ink layer. Keeps the question background.
     if cX.button("X", key=f"wipe__{slot}", type="secondary"):
         st.session_state[ver_key] = int(st.session_state.get(ver_key, 0)) + 1
         st.session_state[mode_key] = "black"
         st.rerun()
 
     ui_scale = float(st.session_state.get("ui_scale", 3.0))
-    height_px = int(st.session_state[h_key])
+    zoom = float(st.session_state.get(z_key, 1.0))
 
-    # Embedded question scale: responds to ui_scale, but much more gently.
-    embed_scale = max(0.80, min(1.20, ui_scale * 0.35))
+    # Base embed scale follows ui_scale gently; zoom multiplies to enlarge lettering/diagram.
+    base_embed = max(0.85, min(1.25, ui_scale * 0.35))
+    embed_scale = max(0.70, min(1.60, base_embed * zoom))
 
-    # Render ONLY the question band (so zoom mostly changes blank working space).
-    q_band_h = int(max(380, min(720, 520 * embed_scale)))
+    # Question band height grows with embed scale so zoom isn't cancelled by auto-fit.
+    q_band_h = int(max(440, min(int(PAD_H * 0.78), 620 * embed_scale)))
 
     bg_bytes = _question_bg_png(
         prompt=q.prompt,
@@ -1127,32 +1136,28 @@ def _render_canvas(slot: str, q) -> None:
         embed_scale=embed_scale,
         width_px=CANVAS_W,
         height_px=q_band_h,
-        content_ratio=0.98,  # use almost the full band height for the question
+        content_ratio=0.98,
     )
     bg_b64 = base64.b64encode(bg_bytes).decode("ascii")
 
-    # Storage key stays stable for the question; DOM id includes height so zoom forces a redraw.
+    # Storage key stays stable for the question; changing ver wipes.
     storage_key = f"mw_pad::{slot}::{int(st.session_state[ver_key])}::{getattr(q, 'qid', '')}"
-    dom_id = f"{storage_key}__h{height_px}"
+    dom_id = storage_key.replace(':', '_')
 
-    # NOTE: components.html does not accept a `key=` argument.
-    # To force Streamlit to refresh the iframe when height/version/mode changes,
-    # embed a small nonce comment that changes whenever the state changes.
-    nonce = f"{slot}__v{int(st.session_state[ver_key])}__h{height_px}__m{mode}"
+    # Force iframe refresh when zoom/mode/version changes using a nonce comment.
+    nonce = f"{slot}__v{int(st.session_state[ver_key])}__z{zoom:.2f}__m{mode}"
 
     html_block = f"""<!-- {nonce} -->
 <style>html,body{{margin:0;padding:0;background:#ffffff;}}</style>
-<div id="{dom_id}" style="width:100%; height:{height_px}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
+<div id="{dom_id}" style="width:100%; height:{PAD_H}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
   <img src="data:image/png;base64,{bg_b64}"
        style="position:absolute; left:0; top:0; width:100%; height:auto; pointer-events:none; user-select:none;" />
-  <canvas id="draw" width="{CANVAS_W}" height="{height_px}"
+  <canvas id="draw" width="{CANVAS_W}" height="{PAD_H}"
           style="position:absolute; left:0; top:0; width:100%; height:100%; touch-action:none;"></canvas>
 </div>
 <script>
 (function(){{
   const STORAGE = {json.dumps(storage_key)};
-  // Prefer parent localStorage so drawings persist even if Streamlit remounts this iframe.
-  // (iPad/Safari can treat iframe storage as ephemeral.)
   const LS = (window.parent && window.parent.localStorage) ? window.parent.localStorage : window.localStorage;
   const root = document.getElementById({json.dumps(dom_id)});
   if(!root) return;
@@ -1180,16 +1185,9 @@ def _render_canvas(slot: str, q) -> None:
   }}
 
   function setMode(){{
-    const mode = {json.dumps(mode)};
-    if(mode === 'eraser'){{
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-      ctx.lineWidth = {stroke_width};
-    }} else {{
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = {json.dumps(stroke_color)};
-      ctx.lineWidth = {stroke_width};
-    }}
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = {json.dumps(stroke_color)};
+    ctx.lineWidth = {stroke_width};
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
   }}
@@ -1233,12 +1231,11 @@ def _render_canvas(slot: str, q) -> None:
 }})();
 </script>
 """
+
     components.html(
         html_block,
-        height=height_px + 8,
+        height=PAD_H + 8,
     )
-
-
 # ---------------- Practice mode ----------------
 def _enter_practice(topic: str, template_id: str, max_difficulty: int):
     st.session_state.mode = "practice"
