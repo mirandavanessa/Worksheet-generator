@@ -78,6 +78,93 @@ _BG = (255, 255, 255)
 _FG = (0, 0, 0)
 
 
+def _text_bbox(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> Tuple[int, int]:
+    """Return (w, h) for text using the provided font."""
+    try:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return (bbox[2] - bbox[0], bbox[3] - bbox[1])
+    except Exception:
+        return draw.textsize(text, font=font)
+
+
+def _label(draw: ImageDraw.ImageDraw, xy: Tuple[float, float], text: str, font: ImageFont.ImageFont, pad: int = 3):
+    """Draw a label with a small background box so lines do not show through."""
+    x, y = xy
+    w, h = _text_bbox(draw, text, font)
+    x0 = int(round(x))
+    y0 = int(round(y))
+    draw.rectangle([x0 - pad, y0 - pad, x0 + w + pad, y0 + h + pad], fill=_BG)
+    draw.text((x0, y0), text, fill=_FG, font=font)
+
+
+def _arrowhead(draw: ImageDraw.ImageDraw, tip: Tuple[float, float], direction: Tuple[float, float], size: int = 8):
+    """Draw a simple filled triangular arrowhead."""
+    tx, ty = tip
+    dx, dy = direction
+    mag = (dx * dx + dy * dy) ** 0.5
+    if mag == 0:
+        return
+    dx /= mag
+    dy /= mag
+    px, py = -dy, dx
+    base_x = tx - dx * size
+    base_y = ty - dy * size
+    left = (base_x + px * (size * 0.6), base_y + py * (size * 0.6))
+    right = (base_x - px * (size * 0.6), base_y - py * (size * 0.6))
+    draw.polygon([(tx, ty), left, right], fill=_FG)
+
+
+def _dim_h(draw: ImageDraw.ImageDraw, x0: float, x1: float, y: float, offset: float, label: str,
+           font: ImageFont.ImageFont, tick: int = 8, lw: int = 2):
+    """Horizontal dimension line with arrowheads and label."""
+    if x1 < x0:
+        x0, x1 = x1, x0
+    yy = y + offset
+    draw.line([(x0, y), (x0, yy)], fill=_FG, width=lw)
+    draw.line([(x1, y), (x1, yy)], fill=_FG, width=lw)
+    draw.line([(x0, yy), (x1, yy)], fill=_FG, width=lw)
+    _arrowhead(draw, (x0, yy), (1, 0), size=tick)
+    _arrowhead(draw, (x1, yy), (-1, 0), size=tick)
+    w, h = _text_bbox(draw, label, font)
+    _label(draw, ((x0 + x1) / 2 - w / 2, yy - h - 6), label, font)
+
+
+def _dim_v(draw: ImageDraw.ImageDraw, y0: float, y1: float, x: float, offset: float, label: str,
+           font: ImageFont.ImageFont, tick: int = 8, lw: int = 2):
+    """Vertical dimension line with arrowheads and label."""
+    if y1 < y0:
+        y0, y1 = y1, y0
+    xx = x + offset
+    draw.line([(x, y0), (xx, y0)], fill=_FG, width=lw)
+    draw.line([(x, y1), (xx, y1)], fill=_FG, width=lw)
+    draw.line([(xx, y0), (xx, y1)], fill=_FG, width=lw)
+    _arrowhead(draw, (xx, y0), (0, 1), size=tick)
+    _arrowhead(draw, (xx, y1), (0, -1), size=tick)
+    w, h = _text_bbox(draw, label, font)
+    _label(draw, (xx + 6, (y0 + y1) / 2 - h / 2), label, font)
+
+
+def _dashed_line(draw: ImageDraw.ImageDraw, p0: Tuple[float, float], p1: Tuple[float, float], dash: int = 8,
+                 gap: int = 6, lw: int = 2):
+    """Draw a dashed line between two points."""
+    x0, y0 = p0
+    x1, y1 = p1
+    dx, dy = x1 - x0, y1 - y0
+    dist = (dx * dx + dy * dy) ** 0.5
+    if dist == 0:
+        return
+    ux, uy = dx / dist, dy / dist
+    cur = 0.0
+    while cur < dist:
+        seg = min(dash, dist - cur)
+        sx0 = x0 + ux * cur
+        sy0 = y0 + uy * cur
+        sx1 = x0 + ux * (cur + seg)
+        sy1 = y0 + uy * (cur + seg)
+        draw.line([(sx0, sy0), (sx1, sy1)], fill=_FG, width=lw)
+        cur += dash + gap
+
+
 def _default_font(size: int = 27):
     try:
         return ImageFont.truetype("DejaVuSans.ttf", size=size)
@@ -93,16 +180,18 @@ def _img_bytes(img: Image.Image) -> bytes:
 
 def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str) -> bytes:
     """Rectilinear notch shape with labels. White background, black lines."""
-    img = Image.new("RGB", (520, 240), _BG)
+    # Slightly larger canvas prevents dimension labels clipping at the edges.
+    img = Image.new("RGB", (580, 280), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(27)
 
-    x0, y0 = 60, 200
-    x1, y1 = 460, 40
+    x0, y0 = 70, 230
+    x1, y1 = 510, 55
 
-    notch_left = 220
-    notch_w = 90
-    notch_d = 60
+    total_w = x1 - x0
+    notch_w = int(total_w * 0.22)
+    notch_left = x0 + int(total_w * 0.36)
+    notch_d = 70
 
     p0 = (x0, y0)
     p1 = (x1, y0)
@@ -116,26 +205,14 @@ def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str)
     pts = [p0, p1, p2, p3, p4, p5, p6, p7, p0]
     draw.line(pts, fill=_FG, width=4)
 
-    def mid(a, b):
-        return ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
-
-    mx, my = mid(p0, p1)
-    draw.text((mx - 12, my + 8), W, fill=_FG, font=font)
-
-    mx, my = mid(p1, p2)
-    draw.text((mx + 10, my - 10), H, fill=_FG, font=font)
-
-    mx, my = mid(p7, p6)
-    draw.text((mx - 12, my - 28), L1, fill=_FG, font=font)
-
-    mx, my = mid(p5, p4)
-    draw.text((mx - 8, my + 10), w, fill=_FG, font=font)
-
-    mx, my = mid(p3, p2)
-    draw.text((mx - 8, my - 28), L2, fill=_FG, font=font)
-
-    mx, my = mid(p3, p4)
-    draw.text((mx + 10, my - 10), d, fill=_FG, font=font)
+    # Dimension-style labels (GCSE-style: outside the shape with arrowheads)
+    _dim_h(draw, p0[0], p1[0], y0, offset=24, label=W, font=font)
+    _dim_v(draw, p2[1], p1[1], x1, offset=24, label=H, font=font)
+    _dim_h(draw, p7[0], p6[0], y1, offset=-24, label=L1, font=font)
+    _dim_h(draw, p3[0], p2[0], y1, offset=-24, label=L2, font=font)
+    _dim_h(draw, p5[0], p4[0], p5[1], offset=20, label=w, font=font)
+    # Put notch depth label inside the notch area to avoid clashing with outer height
+    _dim_v(draw, p3[1], p4[1], p3[0], offset=-26, label=d, font=font)
 
     return _img_bytes(img)
 
@@ -150,8 +227,8 @@ def _rectangle_diagram(L: str, W: str) -> bytes:
     x1, y1 = 350, 60
     draw.rectangle([x0, y1, x1, y0], outline=_FG, width=4)
 
-    draw.text(((x0 + x1) / 2 - 10, y0 + 8), L, fill=_FG, font=font)
-    draw.text((x1 + 10, (y0 + y1) / 2 - 10), W, fill=_FG, font=font)
+    _dim_h(draw, x0, x1, y0, offset=22, label=L, font=font)
+    _dim_v(draw, y1, y0, x1, offset=22, label=W, font=font)
     return _img_bytes(img)
 
 
@@ -168,7 +245,7 @@ def _triangle_diagram(base: str, height: str) -> bytes:
     draw.line([A, B, C, A], fill=_FG, width=4)
 
     foot = (C[0], A[1])
-    draw.line([C, foot], fill=_FG, width=2)
+    _dashed_line(draw, C, foot, dash=7, gap=6, lw=2)
 
     ra = 10
     draw.line(
@@ -177,8 +254,8 @@ def _triangle_diagram(base: str, height: str) -> bytes:
         width=2,
     )
 
-    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), base, fill=_FG, font=font)
-    draw.text((foot[0] + 10, (C[1] + foot[1]) / 2 - 10), height, fill=_FG, font=font)
+    _dim_h(draw, A[0], B[0], A[1], offset=22, label=base, font=font)
+    _dim_v(draw, C[1], foot[1], foot[0], offset=24, label=height, font=font)
     return _img_bytes(img)
 
 
@@ -195,13 +272,13 @@ def _parallelogram_diagram(base: str, height: str) -> bytes:
     draw.line([A, B, C, D, A], fill=_FG, width=4)
 
     foot = (D[0], A[1])
-    draw.line([D, foot], fill=_FG, width=2)
+    _dashed_line(draw, D, foot, dash=7, gap=6, lw=2)
 
     ra = 10
     draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
 
-    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), base, fill=_FG, font=font)
-    draw.text((foot[0] - 25, (D[1] + foot[1]) / 2 - 10), height, fill=_FG, font=font)
+    _dim_h(draw, A[0], B[0], A[1], offset=22, label=base, font=font)
+    _dim_v(draw, D[1], foot[1], foot[0], offset=-26, label=height, font=font)
     return _img_bytes(img)
 
 
@@ -219,14 +296,14 @@ def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
     draw.line([A, B, C, D, A], fill=_FG, width=4)
 
     foot = (D[0], A[1])
-    draw.line([D, foot], fill=_FG, width=2)
+    _dashed_line(draw, D, foot, dash=7, gap=6, lw=2)
 
     ra = 10
     draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
 
-    draw.text(((D[0] + C[0]) / 2 - 10, D[1] - 28), a, fill=_FG, font=font)
-    draw.text(((A[0] + B[0]) / 2 - 10, A[1] + 8), b, fill=_FG, font=font)
-    draw.text((foot[0] - 25, (D[1] + foot[1]) / 2 - 10), h, fill=_FG, font=font)
+    _dim_h(draw, D[0], C[0], D[1], offset=-22, label=a, font=font)
+    _dim_h(draw, A[0], B[0], A[1], offset=22, label=b, font=font)
+    _dim_v(draw, D[1], foot[1], foot[0], offset=-26, label=h, font=font)
     return _img_bytes(img)
 
 
@@ -243,11 +320,17 @@ def _kite_diagram(d1: str, d2: str) -> bytes:
 
     draw.line([top, right, bottom, left, top], fill=_FG, width=4)
 
-    draw.line([top, bottom], fill=_FG, width=2)
-    draw.line([left, right], fill=_FG, width=2)
+    # Diagonals shown with dashed lines (common in exam resources)
+    _dashed_line(draw, top, bottom, dash=7, gap=6, lw=2)
+    _dashed_line(draw, left, right, dash=7, gap=6, lw=2)
 
-    draw.text((225, 125), d1, fill=_FG, font=font)
-    draw.text((170, 145), d2, fill=_FG, font=font)
+    # Right angle marker at intersection (kite diagonals are perpendicular)
+    cx, cy = 210, 130
+    ra = 10
+    draw.line([(cx, cy), (cx + ra, cy), (cx + ra, cy + ra)], fill=_FG, width=2)
+
+    _dim_v(draw, top[1], bottom[1], cx, offset=26, label=d1, font=font)
+    _dim_h(draw, left[0], right[0], cy, offset=26, label=d2, font=font)
     return _img_bytes(img)
 
 
