@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import random
+import math
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -337,6 +338,38 @@ def _kite_diagram(d1: str, d2: str) -> bytes:
 
     _label_center(draw, (345, 187), d1, font)
     _label_center(draw, (255, 225), d2, font)
+
+    return _img_bytes(img)
+
+
+def _pythagoras_triangle_diagram(a_label: str, b_label: str, c_label: str) -> bytes:
+    """Right-angled triangle diagram for Pythagoras' theorem.
+
+    Labels are placed adjacent to the relevant edges (no arrows / no dimension lines),
+    consistent with the EPP-style labelling used elsewhere in this project.
+    a_label = vertical leg, b_label = horizontal leg, c_label = hypotenuse.
+    """
+    img = Image.new("RGB", (700, 440), _BG)
+    draw = ImageDraw.Draw(img)
+    font = _default_font(44)
+
+    A = (160, 350)  # right angle
+    B = (560, 350)
+    C = (160, 90)
+
+    # Triangle
+    draw.line([A, B, C, A], fill=_FG, width=4)
+
+    # Right-angle marker at A
+    s = 30
+    draw.line([(A[0], A[1]), (A[0] + s, A[1])], fill=_FG, width=3)
+    draw.line([(A[0] + s, A[1]), (A[0] + s, A[1] - s)], fill=_FG, width=3)
+    draw.line([(A[0] + s, A[1] - s), (A[0], A[1] - s)], fill=_FG, width=3)
+
+    # Labels (plain text)
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 30), b_label, font)          # base
+    _label_center(draw, (A[0] - 55, (A[1] + C[1]) / 2), a_label, font)           # height
+    _label_center(draw, ((B[0] + C[0]) / 2 + 18, (B[1] + C[1]) / 2 - 18), c_label, font)  # hyp
 
     return _img_bytes(img)
 
@@ -1219,6 +1252,120 @@ def _gen_area_find_x(rng: random.Random, seed: int, params: Optional[Dict[str, A
     ]
     return prompt, latex, answer, working, diagram
 
+# --- Pythagoras' theorem (with diagrams) ---
+
+def _sqrt_simplify(n: int) -> Tuple[int, int]:
+    """Return (k, m) such that sqrt(n) = k*sqrt(m) with m squarefree-ish."""
+    if n <= 0:
+        return 0, 0
+    r = int(math.isqrt(n))
+    for k in range(r, 1, -1):
+        sq = k * k
+        if n % sq == 0:
+            return k, n // sq
+    return 1, n
+
+
+def _sqrt_latex(n: int) -> str:
+    k, m = _sqrt_simplify(n)
+    if m == 1:
+        return str(k)
+    if k == 1:
+        return rf"\sqrt{{{m}}}"
+    return rf"{k}\sqrt{{{m}}}"
+
+
+def _gen_pyth_hyp_int(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    triples = [(3, 4, 5), (5, 12, 13), (6, 8, 10), (8, 15, 17), (7, 24, 25)]
+    a0, b0, c0 = rng.choice(triples)
+    scale = rng.choice([1, 2, 3])
+    a, b, c = a0 * scale, b0 * scale, c0 * scale
+
+    diagram = _pythagoras_triangle_diagram(str(a), str(b), "x")
+    prompt = "Find the length marked x (cm)."
+    latex = ""
+    answer = rf"x = {c}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Use Pythagoras' theorem."),
+        ("math", rf"x^2 = {a}^2 + {b}^2"),
+        ("math", rf"x^2 = {a*a} + {b*b} = {c*c}"),
+        ("math", rf"x = \sqrt{{{c*c}}} = {c}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_pyth_leg_int(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    triples = [(3, 4, 5), (5, 12, 13), (6, 8, 10), (8, 15, 17), (7, 24, 25)]
+    a0, b0, c0 = rng.choice(triples)
+    scale = rng.choice([1, 2, 3])
+    a, b, c = a0 * scale, b0 * scale, c0 * scale
+
+    # Find the base (b) given hypotenuse and vertical leg
+    diagram = _pythagoras_triangle_diagram(str(a), "x", str(c))
+    prompt = "Find the length marked x (cm)."
+    latex = ""
+    answer = rf"x = {b}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Use Pythagoras' theorem."),
+        ("math", rf"{c}^2 = {a}^2 + x^2"),
+        ("math", rf"x^2 = {c}^2 - {a}^2"),
+        ("math", rf"x^2 = {c*c} - {a*a} = {b*b}"),
+        ("math", rf"x = \sqrt{{{b*b}}} = {b}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_pyth_hyp_surd(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    # Choose legs so hypotenuse is not an integer (often simplifies).
+    for _ in range(60):
+        a = rng.randint(4, 18)
+        b = rng.randint(4, 18)
+        n = a*a + b*b
+        r = int(math.isqrt(n))
+        if r*r != n and n <= 600:
+            break
+    diagram = _pythagoras_triangle_diagram(str(a), str(b), "x")
+    prompt = "Find the length marked x (cm)."
+    latex = ""
+    surd = _sqrt_latex(n)
+    answer = rf"x = {surd}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Use Pythagoras' theorem."),
+        ("math", rf"x^2 = {a}^2 + {b}^2"),
+        ("math", rf"x^2 = {a*a} + {b*b} = {n}"),
+        ("math", rf"x = \sqrt{{{n}}}"),
+    ]
+    if surd != rf"\sqrt{{{n}}}":
+        working.append(("math", rf"x = {surd}"))
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_pyth_leg_surd(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    # Choose hypotenuse and one leg so the other leg is a surd.
+    for _ in range(80):
+        c = rng.randint(10, 26)
+        a = rng.randint(4, c-1)
+        n = c*c - a*a
+        r = int(math.isqrt(n))
+        if n > 0 and r*r != n and n <= 600:
+            break
+    diagram = _pythagoras_triangle_diagram(str(a), "x", str(c))
+    prompt = "Find the length marked x (cm)."
+    latex = ""
+    surd = _sqrt_latex(n)
+    answer = rf"x = {surd}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Use Pythagoras' theorem."),
+        ("math", rf"{c}^2 = {a}^2 + x^2"),
+        ("math", rf"x^2 = {c}^2 - {a}^2"),
+        ("math", rf"x^2 = {c*c} - {a*a} = {n}"),
+        ("math", rf"x = \sqrt{{{n}}}"),
+    ]
+    if surd != rf"\sqrt{{{n}}}":
+        working.append(("math", rf"x = {surd}"))
+    return prompt, latex, answer, working, diagram
+
+
 
 # --- Polygon angles ---
 
@@ -1447,6 +1594,12 @@ TEMPLATES: List[Template] = [
     Template("area_compound", "Area of shapes", "compound", "Compound rectilinear", 4, _gen_area_compound_rectilinear),
     Template("area_find_x", "Area of shapes", "find_x", "Given area, find x", 5, _gen_area_find_x),
 
+    # Pythagoras' theorem
+    Template("pyth_hyp_int", "Pythagoras' theorem", "hyp_int", "Find hypotenuse (integer)", 1, _gen_pyth_hyp_int),
+    Template("pyth_leg_int", "Pythagoras' theorem", "leg_int", "Find a leg (integer)", 2, _gen_pyth_leg_int),
+    Template("pyth_hyp_surd", "Pythagoras' theorem", "hyp_surd", "Find hypotenuse (surd)", 3, _gen_pyth_hyp_surd),
+    Template("pyth_leg_surd", "Pythagoras' theorem", "leg_surd", "Find a leg (surd)", 4, _gen_pyth_leg_surd),
+
     Template("perim_all", "Perimeter of rectilinear shapes", "all", "All sides given", 1, _gen_rect_perim_all),
     Template("perim_missing", "Perimeter of rectilinear shapes", "missing", "Missing sides to work out", 2, _gen_rect_perim_missing),
     Template("perim_find_x", "Perimeter of rectilinear shapes", "find_x", "Perimeter given, find x", 3, _gen_rect_perim_find_x),
@@ -1477,6 +1630,7 @@ TOPIC_ORDER: List[str] = [
     "Completing the square",
     "Perimeter of rectilinear shapes",
     "Area of shapes",
+    "Pythagoras' theorem",
     "Interior and exterior angles of polygons",
     "Reasoning with polygon angles",
     "Algebraic geometry and angle equations",
@@ -1521,6 +1675,7 @@ TOPIC_STRANDS: Dict[str, Dict[str, Any]] = {
     # Geometry & measures
     "Perimeter of rectilinear shapes": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Area of shapes": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
+    "Pythagoras\' theorem": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Interior and exterior angles of polygons": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Reasoning with polygon angles": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     # Cross-domain: geometry with algebra
