@@ -971,10 +971,10 @@ def _question_bg_png(
         max_text_w = width_px - 2 * pad
 
         # Prompt (keep footprint similar to the old on-page prompt)
-        prompt_font = _pil_font(max(14, int(52 * scale)), bold=True)
+        prompt_font = _pil_font(max(16, int(72 * scale)), bold=True)
         for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
             draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
-            y += int(prompt_font.size * 1.22)
+            y += int(prompt_font.size * 1.18)
 
         y += int(8 * scale)
 

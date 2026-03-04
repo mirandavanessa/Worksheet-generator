@@ -169,7 +169,7 @@ def _dashed_line(draw: ImageDraw.ImageDraw, p0: Tuple[float, float], p1: Tuple[f
         cur += dash + gap
 
 
-def _default_font(size: int = 27):
+def _default_font(size: int = 40):
     try:
         return ImageFont.truetype("DejaVuSans.ttf", size=size)
     except Exception:
@@ -187,17 +187,17 @@ def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str)
 
     Labels are placed adjacent to the relevant edges (no arrows / no dimension lines).
     """
-    img = Image.new("RGB", (580, 280), _BG)
+    img = Image.new("RGB", (870, 420), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(27)
+    font = _default_font(40)
 
-    x0, y0 = 70, 230
-    x1, y1 = 510, 55
+    x0, y0 = 105, 345
+    x1, y1 = 765, 82
 
     total_w = x1 - x0
     notch_w = int(total_w * 0.22)
     notch_left = x0 + int(total_w * 0.36)
-    notch_d = 70
+    notch_d = 105
 
     p0 = (x0, y0)
     p1 = (x1, y0)
@@ -209,129 +209,122 @@ def _rectilinear_notch_diagram(W: str, H: str, L1: str, w: str, L2: str, d: str)
     p7 = (x0, y1)
 
     pts = [p0, p1, p2, p3, p4, p5, p6, p7, p0]
-    draw.line(pts, fill=_FG, width=3)
+    draw.line(pts, fill=_FG, width=4)
 
-    # Labels (no boxes) – mimic the EPP look: numbers placed near edges.
-    _label_center(draw, ((p0[0] + p1[0]) / 2, y0 + 20), W, font)                         # bottom width
-    _label_center(draw, (x0 - 38, (p7[1] + p0[1]) / 2), H, font)                          # left height
-    _label_center(draw, ((p7[0] + p6[0]) / 2, y1 - 22), L1, font)                         # top-left segment
-    _label_center(draw, ((p3[0] + p2[0]) / 2, y1 - 22), L2, font)                         # top-right segment
-    _label_center(draw, ((p5[0] + p4[0]) / 2, p5[1] - 22), w, font)                       # notch bottom (inside)
-    _label_center(draw, (p3[0] - 28, (p3[1] + p4[1]) / 2), d, font)                       # notch depth (inside)
+    _label_center(draw, ((p0[0] + p1[0]) / 2, y0 + 30), W, font)
+    _label_center(draw, (x0 - 57, (p7[1] + p0[1]) / 2), H, font)
+    _label_center(draw, ((p7[0] + p6[0]) / 2, y1 - 33), L1, font)
+    _label_center(draw, ((p3[0] + p2[0]) / 2, y1 - 33), L2, font)
+    _label_center(draw, ((p5[0] + p4[0]) / 2, p5[1] - 33), w, font)
+    _label_center(draw, (p3[0] - 42, (p3[1] + p4[1]) / 2), d, font)
 
     return _img_bytes(img)
 
 def _rectangle_diagram(L: str, W: str) -> bytes:
     """Axis-aligned rectangle with GCSE worksheet-style labels (no arrows)."""
-    img = Image.new("RGB", (420, 220), _BG)
+    img = Image.new("RGB", (630, 330), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(27)
+    font = _default_font(40)
 
-    x0, y0 = 70, 180
-    x1, y1 = 350, 60
-    draw.rectangle([x0, y1, x1, y0], outline=_FG, width=3)
+    x0, y0 = 105, 270
+    x1, y1 = 525, 90
+    draw.rectangle([x0, y1, x1, y0], outline=_FG, width=4)
 
-    # Match the guide: horizontal label above, vertical label on the left.
-    _label_center(draw, ((x0 + x1) / 2, y1 - 22), L, font)                 # length (top)
-    _label_center(draw, (x0 - 28, (y0 + y1) / 2), W, font)                 # width (left)
+    _label_center(draw, ((x0 + x1) / 2, y1 - 33), L, font)
+    _label_center(draw, (x0 - 42, (y0 + y1) / 2), W, font)
 
     return _img_bytes(img)
 
 def _triangle_diagram(base: str, height: str) -> bytes:
     """Triangle with dashed perpendicular height and clear labels (no arrows)."""
-    img = Image.new("RGB", (420, 240), _BG)
+    img = Image.new("RGB", (630, 360), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(27)
+    font = _default_font(40)
 
-    A = (80, 190)
-    B = (340, 190)
-    C = (260, 70)
+    A = (120, 285)
+    B = (510, 285)
+    C = (390, 105)
 
-    draw.line([A, B, C, A], fill=_FG, width=3)
+    draw.line([A, B, C, A], fill=_FG, width=4)
 
     foot = (C[0], A[1])
-    _dashed_line(draw, C, foot, dash=7, gap=6, lw=2)
+    _dashed_line(draw, C, foot, dash=10, gap=9, lw=3)
 
-    ra = 10
-    draw.line([(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)], fill=_FG, width=2)
+    ra = 15
+    draw.line([(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)], fill=_FG, width=3)
 
-    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 20), base, font)                  # base
-    # Height label inside the triangle, adjacent to the dashed height line
-    _label_center(draw, (foot[0] + 32, (C[1] + foot[1]) / 2), height, font)
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 30), base, font)
+    _label_center(draw, (foot[0] + 48, (C[1] + foot[1]) / 2), height, font)
 
     return _img_bytes(img)
 
 def _parallelogram_diagram(base: str, height: str) -> bytes:
     """Parallelogram with dashed perpendicular height and simple labels."""
-    img = Image.new("RGB", (460, 240), _BG)
+    img = Image.new("RGB", (690, 360), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(27)
+    font = _default_font(40)
 
-    A = (110, 190)
-    B = (360, 190)
-    D = (70, 80)
-    C = (320, 80)
+    A = (165, 285)
+    B = (540, 285)
+    D = (105, 120)
+    C = (480, 120)
 
-    draw.line([A, B, C, D, A], fill=_FG, width=3)
+    draw.line([A, B, C, D, A], fill=_FG, width=4)
 
     foot = (D[0], A[1])
-    _dashed_line(draw, D, foot, dash=7, gap=6, lw=2)
+    _dashed_line(draw, D, foot, dash=10, gap=9, lw=3)
 
-    ra = 10
-    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
+    ra = 15
+    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=3)
 
-    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 20), base, font)                   # base
-    # Height label positioned just inside near the dashed line
-    _label_center(draw, (foot[0] + 34, (D[1] + foot[1]) / 2), height, font)
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 30), base, font)
+    _label_center(draw, (foot[0] + 51, (D[1] + foot[1]) / 2), height, font)
 
     return _img_bytes(img)
 
 def _trapezium_diagram(a: str, b: str, h: str) -> bytes:
     """Trapezium with parallel sides a (top) and b (bottom) and dashed perpendicular height."""
-    img = Image.new("RGB", (480, 260), _BG)
+    img = Image.new("RGB", (720, 390), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(27)
+    font = _default_font(40)
 
-    A = (120, 200)
-    B = (380, 200)
-    D = (160, 80)
-    C = (320, 80)
+    A = (180, 300)
+    B = (570, 300)
+    D = (240, 120)
+    C = (480, 120)
 
-    draw.line([A, B, C, D, A], fill=_FG, width=3)
+    draw.line([A, B, C, D, A], fill=_FG, width=4)
 
     foot = (D[0], A[1])
-    _dashed_line(draw, D, foot, dash=7, gap=6, lw=2)
+    _dashed_line(draw, D, foot, dash=10, gap=9, lw=3)
 
-    ra = 10
-    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=2)
+    ra = 15
+    draw.line([(foot[0], foot[1]), (foot[0] + ra, foot[1]), (foot[0] + ra, foot[1] - ra)], fill=_FG, width=3)
 
-    _label_center(draw, ((D[0] + C[0]) / 2, D[1] - 22), a, font)                      # top
-    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 20), b, font)                      # bottom
-    # Height label inside near the dashed height
-    _label_center(draw, (foot[0] + 34, (D[1] + foot[1]) / 2), h, font)
+    _label_center(draw, ((D[0] + C[0]) / 2, D[1] - 33), a, font)
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 30), b, font)
+    _label_center(draw, (foot[0] + 51, (D[1] + foot[1]) / 2), h, font)
 
     return _img_bytes(img)
 
 def _kite_diagram(d1: str, d2: str) -> bytes:
     """Kite/rhombus with dashed diagonals and labels (no arrows)."""
-    img = Image.new("RGB", (420, 260), _BG)
+    img = Image.new("RGB", (630, 390), _BG)
     draw = ImageDraw.Draw(img)
-    font = _default_font(27)
+    font = _default_font(40)
 
-    top = (210, 60)
-    right = (330, 130)
-    bottom = (210, 210)
-    left = (90, 130)
+    top = (315, 90)
+    right = (495, 195)
+    bottom = (315, 315)
+    left = (135, 195)
 
-    draw.line([top, right, bottom, left, top], fill=_FG, width=3)
+    draw.line([top, right, bottom, left, top], fill=_FG, width=4)
 
-    # diagonals (dashed)
-    _dashed_line(draw, top, bottom, dash=7, gap=6, lw=2)
-    _dashed_line(draw, left, right, dash=7, gap=6, lw=2)
+    _dashed_line(draw, top, bottom, dash=10, gap=9, lw=3)
+    _dashed_line(draw, left, right, dash=10, gap=9, lw=3)
 
-    # labels slightly offset from the diagonals
-    _label_center(draw, (230, 125), d1, font)      # vertical diagonal
-    _label_center(draw, (170, 150), d2, font)      # horizontal diagonal
+    _label_center(draw, (345, 187), d1, font)
+    _label_center(draw, (255, 225), d2, font)
 
     return _img_bytes(img)
 
