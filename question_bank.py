@@ -248,6 +248,104 @@ def _rectangle_diagram(L: str, W: str) -> bytes:
 
     return _img_bytes(img)
 
+
+def _rectangle_with_diagonal_diagram(L_top: str, W_left: str, diag_label: str) -> bytes:
+    """Rectangle with a diagonal and GCSE worksheet-style labels (no arrows).
+
+    L_top: label for the top edge
+    W_left: label for the left edge
+    diag_label: label placed just off the diagonal (e.g. x or 13)
+    """
+    img = Image.new("RGB", (660, 360), _BG)
+    draw = ImageDraw.Draw(img)
+    font = _default_font(40)
+
+    x0, y0 = 120, 285
+    x1, y1 = 540, 90
+    draw.rectangle([x0, y1, x1, y0], outline=_FG, width=4)
+
+    # Diagonal from bottom-left to top-right
+    draw.line([(x0, y0), (x1, y1)], fill=_FG, width=4)
+
+    # Edge labels
+    if L_top:
+        _label_center(draw, ((x0 + x1) / 2, y1 - 33), L_top, font)
+    if W_left:
+        _label_center(draw, (x0 - 42, (y0 + y1) / 2), W_left, font)
+
+    # Diagonal label: offset away from the rectangle centre to avoid touching the line
+    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+    vx, vy = (x1 - x0), (y1 - y0)
+    nx, ny = vy, -vx
+    # Ensure normal points away from rectangle centre
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    # n currently arbitrary; choose direction so that (centre-mid) dot n < 0 (push outwards)
+    if ((cx - mx) * nx + (cy - my) * ny) > 0:
+        nx, ny = -nx, -ny
+    nmag = (nx * nx + ny * ny) ** 0.5
+    if nmag == 0:
+        nmag = 1.0
+    nx, ny = nx / nmag, ny / nmag
+    # Bigger offset to prevent the diagonal running through wide labels (e.g. '10').
+    off = 58
+    _label_center(draw, (mx + nx * off, my + ny * off), diag_label, font)
+
+    return _img_bytes(img)
+
+
+def _isosceles_height_diagram(equal_side: str, base: str, height_label: str) -> bytes:
+    """Isosceles triangle with a dashed perpendicular height from the apex.
+
+    Designed for Pythagoras-in-context questions (e.g. find the height).
+    """
+    img = Image.new("RGB", (690, 390), _BG)
+    draw = ImageDraw.Draw(img)
+    font = _default_font(40)
+
+    A = (150, 300)
+    B = (540, 300)
+    C = (345, 90)
+    draw.line([A, B, C, A], fill=_FG, width=4)
+
+    # Height (dashed)
+    foot = (C[0], A[1])
+    _dashed_line(draw, C, foot, dash=10, gap=9, lw=3)
+
+    # Right-angle marker
+    ra = 16
+    draw.line([(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)], fill=_FG, width=3)
+
+    # Labels
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 32), base, font)
+
+    # Equal side labels (place slightly outward from each sloping side)
+    # Left side (A-C)
+    mx1, my1 = (A[0] + C[0]) / 2, (A[1] + C[1]) / 2
+    vx1, vy1 = (C[0] - A[0]), (C[1] - A[1])
+    nx1, ny1 = vy1, -vx1
+    # Push away from triangle centre
+    cx, cy = (A[0] + B[0] + C[0]) / 3, (A[1] + B[1] + C[1]) / 3
+    if ((cx - mx1) * nx1 + (cy - my1) * ny1) > 0:
+        nx1, ny1 = -nx1, -ny1
+    mag1 = (nx1 * nx1 + ny1 * ny1) ** 0.5 or 1.0
+    nx1, ny1 = nx1 / mag1, ny1 / mag1
+    _label_center(draw, (mx1 + nx1 * 28, my1 + ny1 * 28), equal_side, font)
+
+    # Right side (B-C)
+    mx2, my2 = (B[0] + C[0]) / 2, (B[1] + C[1]) / 2
+    vx2, vy2 = (C[0] - B[0]), (C[1] - B[1])
+    nx2, ny2 = vy2, -vx2
+    if ((cx - mx2) * nx2 + (cy - my2) * ny2) > 0:
+        nx2, ny2 = -nx2, -ny2
+    mag2 = (nx2 * nx2 + ny2 * ny2) ** 0.5 or 1.0
+    nx2, ny2 = nx2 / mag2, ny2 / mag2
+    _label_center(draw, (mx2 + nx2 * 28, my2 + ny2 * 28), equal_side, font)
+
+    # Height label (placed to the right of the dashed line)
+    _label_center(draw, (foot[0] + 55, (C[1] + foot[1]) / 2), height_label, font)
+
+    return _img_bytes(img)
+
 def _triangle_diagram(base: str, height: str) -> bytes:
     """Triangle with dashed perpendicular height and clear labels (no arrows)."""
     img = Image.new("RGB", (630, 360), _BG)
@@ -369,7 +467,22 @@ def _pythagoras_triangle_diagram(a_label: str, b_label: str, c_label: str) -> by
     # Labels (plain text)
     _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 30), b_label, font)          # base
     _label_center(draw, (A[0] - 55, (A[1] + C[1]) / 2), a_label, font)           # height
-    _label_center(draw, ((B[0] + C[0]) / 2 + 18, (B[1] + C[1]) / 2 - 18), c_label, font)  # hyp
+
+    # Hypotenuse label: place at the midpoint of BC and push it *away* from A
+    # so it doesn't touch/overlap the hypotenuse.
+    mx, my = (B[0] + C[0]) / 2, (B[1] + C[1]) / 2
+    vx, vy = (C[0] - B[0]), (C[1] - B[1])
+    # Two candidate normals; choose the one pointing away from A.
+    nx, ny = vy, -vx
+    ax, ay = (A[0] - mx), (A[1] - my)
+    if (ax * nx + ay * ny) > 0:
+        nx, ny = -nx, -ny
+    nmag = (nx * nx + ny * ny) ** 0.5
+    if nmag == 0:
+        nmag = 1.0
+    nx, ny = nx / nmag, ny / nmag
+    offset = 36  # px; tuned to keep label near the edge but not touching
+    _label_center(draw, (mx + nx * offset, my + ny * offset), c_label, font)
 
     return _img_bytes(img)
 
@@ -1366,6 +1479,222 @@ def _gen_pyth_leg_surd(rng: random.Random, seed: int, params: Optional[Dict[str,
     return prompt, latex, answer, working, diagram
 
 
+# --- Pythagoras' theorem (in other shapes / orientations) ---
+
+def _square_with_diagonal_diagram(diag_label: str) -> bytes:
+    """Square with a diagonal labelled (used for 'perimeter from diagonal' type questions)."""
+    img = Image.new("RGB", (520, 380), _BG)
+    draw = ImageDraw.Draw(img)
+    font = _default_font(40)
+
+    x0, y0 = 150, 300
+    s = 170
+    x1, y1 = x0 + s, y0 - s
+    draw.rectangle([x0, y1, x1, y0], outline=_FG, width=4)
+    draw.line([(x0, y0), (x1, y1)], fill=_FG, width=4)
+
+    # Diagonal label offset slightly from the diagonal
+    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+    vx, vy = (x1 - x0), (y1 - y0)
+    nx, ny = vy, -vx
+    nmag = (nx * nx + ny * ny) ** 0.5 or 1.0
+    nx, ny = nx / nmag, ny / nmag
+    # Push far enough so the diagonal doesn't run through the label.
+    _label_center(draw, (mx + nx * 48, my + ny * 48), diag_label, font)
+
+    return _img_bytes(img)
+
+
+def _gen_pyth_rect_diag_int(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Diagonal of a rectangle (integer answers) - embedded right triangle."""
+    triples = [(3, 4, 5), (5, 12, 13), (6, 8, 10), (8, 15, 17), (7, 24, 25)]
+    a0, b0, c0 = rng.choice(triples)
+    scale = rng.choice([1, 2, 3])
+    L, W, d = a0 * scale, b0 * scale, c0 * scale
+
+    diagram = _rectangle_with_diagonal_diagram(str(L), str(W), "x")
+    prompt = "Find the length marked x (cm)."
+    latex = ""
+    answer = rf"x = {d}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Use Pythagoras' theorem on the right-angled triangle."),
+        ("math", rf"x^2 = {L}^2 + {W}^2"),
+        ("math", rf"x^2 = {L*L} + {W*W} = {d*d}"),
+        ("math", rf"x = \sqrt{{{d*d}}} = {d}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_pyth_rect_side_int(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Missing side of a rectangle given diagonal (integer answers)."""
+    triples = [(3, 4, 5), (5, 12, 13), (6, 8, 10), (8, 15, 17), (7, 24, 25)]
+    a0, b0, c0 = rng.choice(triples)
+    scale = rng.choice([1, 2, 3])
+    a, b, c = a0 * scale, b0 * scale, c0 * scale
+
+    # Known top edge = a, left edge = x, diagonal = c
+    diagram = _rectangle_with_diagonal_diagram(str(a), "x", str(c))
+    prompt = "Find the length marked x (cm)."
+    latex = ""
+    answer = rf"x = {b}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Use Pythagoras' theorem on the right-angled triangle."),
+        ("math", rf"{c}^2 = {a}^2 + x^2"),
+        ("math", rf"x^2 = {c}^2 - {a}^2"),
+        ("math", rf"x^2 = {c*c} - {a*a} = {b*b}"),
+        ("math", rf"x = \sqrt{{{b*b}}} = {b}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_pyth_isos_height_int(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Height of an isosceles triangle (integer answers) using Pythagoras."""
+    triples = [(3, 4, 5), (5, 12, 13), (6, 8, 10)]
+    hb0, h0, s0 = rng.choice(triples)  # half-base, height, equal side
+    scale = rng.choice([1, 2, 3])
+    half_base, height, side = hb0 * scale, h0 * scale, s0 * scale
+    base = 2 * half_base
+
+    diagram = _isosceles_height_diagram(str(side), str(base), "x")
+    prompt = "Find the height marked x (cm)."
+    latex = ""
+    answer = rf"x = {height}\ \mathrm{{cm}}"
+    working = [
+        ("text", "The perpendicular height splits the base into two equal parts."),
+        ("math", rf"\frac{{{base}}}{{2}} = {half_base}"),
+        ("text", "Use Pythagoras' theorem on one of the right-angled triangles."),
+        ("math", rf"{side}^2 = x^2 + {half_base}^2"),
+        ("math", rf"x^2 = {side}^2 - {half_base}^2"),
+        ("math", rf"x^2 = {side*side} - {half_base*half_base} = {height*height}"),
+        ("math", rf"x = \sqrt{{{height*height}}} = {height}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_pyth_square_perimeter_surd(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Perimeter of a square given its diagonal (exact surd answers)."""
+    d = rng.choice([6, 8, 10, 12, 14, 16])
+    diagram = _square_with_diagonal_diagram(str(d))
+
+    # Perimeter = 2d*sqrt(2)
+    coef = 2 * d
+    perim = rf"{coef}\sqrt{{2}}"
+
+    prompt = "A square has a diagonal length of " + str(d) + " cm. Find its perimeter." 
+    latex = ""
+    answer = rf"{perim}\ \mathrm{{cm}}"
+    working = [
+        ("text", "In a square, the diagonal forms two congruent right-angled triangles."),
+        ("math", rf"d^2 = s^2 + s^2 = 2s^2"),
+        ("math", rf"{d}^2 = 2s^2"),
+        ("math", rf"s^2 = \frac{{{d*d}}}{{2}}"),
+        ("math", rf"s = \frac{{{d}}}{{\sqrt{{2}}}}"),
+        ("text", "Perimeter = 4s."),
+        ("math", rf"P = 4\times \frac{{{d}}}{{\sqrt{{2}}}} = {perim}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+# --- Finding fractions of an amount ---
+
+def _gen_frac_of_amount_numeric(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    level = (params or {}).get("level", "proper")
+
+    if level == "proper":
+        den = rng.choice([2, 3, 4, 5, 6, 8, 10, 12])
+        num = rng.randint(1, den - 1)
+        k = rng.randint(5, 25)
+        amount = den * k
+    elif level == "proper_simplify":
+        # Choose a fraction that can simplify after multiplying
+        den = rng.choice([6, 8, 9, 10, 12, 15, 16])
+        num = rng.choice([2, 3, 4, 5, 6, 7])
+        num = min(num, den - 1)
+        k = rng.randint(4, 18)
+        amount = den * k
+    else:  # "improper"
+        den = rng.choice([2, 3, 4, 5, 6, 8])
+        num = rng.randint(den + 1, 2 * den + 3)
+        k = rng.randint(4, 18)
+        amount = den * k
+
+    frac = Fraction(num, den)
+    result = frac * amount
+
+    prompt = "Calculate:"
+    latex = rf"\frac{{{num}}}{{{den}}}\ \mathrm{{of}}\ {amount}"
+    answer = _sanitize_math(_fmt_frac(result))
+
+    unit = amount // den
+    working: List[WorkingStep] = [
+        ("text", f"Find 1/{den} of {amount} first."),
+        ("math", rf"{amount} \div {den} = {unit}"),
+        ("text", rf"Multiply by {num}."),
+        ("math", rf"{unit} \times {num} = {_sanitize_math(_fmt_frac(result))}"),
+    ]
+    return prompt, latex, answer, working
+
+
+def _gen_frac_of_amount_worded(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    level = (params or {}).get("level", "easy")
+
+    contexts = []
+    if level == "easy":
+        contexts = ["marbles", "sweets", "students", "books"]
+        den = rng.choice([2, 3, 4, 5, 6, 8, 10])
+        num = rng.randint(1, den - 1)
+        amount = den * rng.randint(6, 24)
+        item = rng.choice(contexts)
+        prompt = f"There are {amount} {item}. {num}/{den} of them are in group A. How many are in group A?"
+        latex = rf"\frac{{{num}}}{{{den}}}\ \mathrm{{of}}\ {amount}"
+        unit = amount // den
+        result = Fraction(num, den) * amount
+        answer = _sanitize_math(_fmt_frac(result))
+        working: List[WorkingStep] = [
+            ("text", f"Find 1/{den} of {amount} first."),
+            ("math", rf"{amount} \div {den} = {unit}"),
+            ("text", rf"Multiply by {num}."),
+            ("math", rf"{unit} \times {num} = {_sanitize_math(_fmt_frac(result))}"),
+        ]
+        return prompt, latex, answer, working
+
+    # Money/measure contexts (a bit more GCSE-like)
+    den = rng.choice([4, 5, 8, 10, 16])
+    num = rng.randint(1, den - 1)
+    if rng.random() < 0.5:
+        # Money
+        pounds = den * rng.randint(6, 30)
+        amount = pounds
+        result = Fraction(num, den) * amount
+        prompt = f"A jacket costs £{amount}. Work out {num}/{den} of the price." 
+        latex = rf"\frac{{{num}}}{{{den}}}\ \mathrm{{of}}\ {amount}"
+        answer = rf"{_sanitize_math(_fmt_frac(result))}\ \mathrm{{pounds}}"
+        unit = amount // den
+        working = [
+            ("text", f"Find 1/{den} of {amount} first."),
+            ("math", rf"{amount} \div {den} = {unit}"),
+            ("text", rf"Multiply by {num}."),
+            ("math", rf"{unit} \times {num} = {_sanitize_math(_fmt_frac(result))}"),
+        ]
+        return prompt, latex, answer, working
+    else:
+        # Volume/mass
+        unit_name = rng.choice(["ml", "g", "cm"])  # simple units
+        amount = den * rng.randint(8, 40)
+        result = Fraction(num, den) * amount
+        prompt = f"A container holds {amount}{unit_name}. Work out {num}/{den} of this amount." 
+        latex = rf"\frac{{{num}}}{{{den}}}\ \mathrm{{of}}\ {amount}"
+        answer = rf"{_sanitize_math(_fmt_frac(result))}\ \mathrm{{{unit_name}}}"
+        unit = amount // den
+        working = [
+            ("text", f"Find 1/{den} of {amount} first."),
+            ("math", rf"{amount} \div {den} = {unit}"),
+            ("text", rf"Multiply by {num}."),
+            ("math", rf"{unit} \times {num} = {_sanitize_math(_fmt_frac(result))}"),
+        ]
+        return prompt, latex, answer, working
+
+
 
 # --- Polygon angles ---
 
@@ -1600,6 +1929,20 @@ TEMPLATES: List[Template] = [
     Template("pyth_hyp_surd", "Pythagoras' theorem", "hyp_surd", "Find hypotenuse (surd)", 3, _gen_pyth_hyp_surd),
     Template("pyth_leg_surd", "Pythagoras' theorem", "leg_surd", "Find a leg (surd)", 4, _gen_pyth_leg_surd),
 
+    # Pythagoras' theorem (in other shapes / orientations)
+    Template("pyth_rect_diag", "Pythagoras' theorem in other shapes", "rect_diag", "Rectangle diagonal (integer)", 1, _gen_pyth_rect_diag_int),
+    Template("pyth_rect_side", "Pythagoras' theorem in other shapes", "rect_side", "Rectangle missing side (integer)", 2, _gen_pyth_rect_side_int),
+    Template("pyth_isos_height", "Pythagoras' theorem in other shapes", "isos_height", "Isosceles triangle height (integer)", 3, _gen_pyth_isos_height_int),
+    Template("pyth_square_perim", "Pythagoras' theorem in other shapes", "sq_perim", "Square perimeter from diagonal (surd)", 4, _gen_pyth_square_perimeter_surd),
+
+    # Fractions of an amount
+    Template("frac_amt_proper", "Finding fractions of an amount", "proper", "Proper fractions (whole-number answers)", 1, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "proper"})),
+    Template("frac_amt_simpl", "Finding fractions of an amount", "proper_simpl", "Proper fractions (include simplifying)", 2, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "proper_simplify"})),
+    Template("frac_amt_improper", "Finding fractions of an amount", "improper", "Improper fractions", 3, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "improper"})),
+
+    Template("frac_amt_word_easy", "Finding fractions of an amount (worded)", "easy", "Worded (counts)", 1, lambda r, s, p: _gen_frac_of_amount_worded(r, s, {"level": "easy"})),
+    Template("frac_amt_word_ctx", "Finding fractions of an amount (worded)", "context", "Worded (money / measure)", 2, lambda r, s, p: _gen_frac_of_amount_worded(r, s, {"level": "context"})),
+
     Template("perim_all", "Perimeter of rectilinear shapes", "all", "All sides given", 1, _gen_rect_perim_all),
     Template("perim_missing", "Perimeter of rectilinear shapes", "missing", "Missing sides to work out", 2, _gen_rect_perim_missing),
     Template("perim_find_x", "Perimeter of rectilinear shapes", "find_x", "Perimeter given, find x", 3, _gen_rect_perim_find_x),
@@ -1623,6 +1966,8 @@ TOPIC_ORDER: List[str] = [
     "Using the nth term",
     "Solving 1 step equations",
     "Solving 2 step equations",
+    "Finding fractions of an amount",
+    "Finding fractions of an amount (worded)",
     "Finding percentages using non-calculator methods",
     "Finding percentages using calculator methods",
     "Increasing and decreasing by percentages using non-calculator methods",
@@ -1631,6 +1976,7 @@ TOPIC_ORDER: List[str] = [
     "Perimeter of rectilinear shapes",
     "Area of shapes",
     "Pythagoras' theorem",
+    "Pythagoras' theorem in other shapes",
     "Interior and exterior angles of polygons",
     "Reasoning with polygon angles",
     "Algebraic geometry and angle equations",
@@ -1667,6 +2013,8 @@ TOPIC_STRANDS: Dict[str, Dict[str, Any]] = {
     "Completing the square": {"primary": "Algebra", "tags": ["Algebra"]},
 
     # Ratio & proportion
+    "Finding fractions of an amount": {"primary": "Number", "tags": ["Number", "Ratio and proportion"]},
+    "Finding fractions of an amount (worded)": {"primary": "Number", "tags": ["Number", "Ratio and proportion"]},
     "Finding percentages using non-calculator methods": {"primary": "Ratio and proportion", "tags": ["Ratio and proportion"]},
     "Finding percentages using calculator methods": {"primary": "Ratio and proportion", "tags": ["Ratio and proportion"]},
     "Increasing and decreasing by percentages using non-calculator methods": {"primary": "Ratio and proportion", "tags": ["Ratio and proportion"]},
@@ -1676,6 +2024,7 @@ TOPIC_STRANDS: Dict[str, Dict[str, Any]] = {
     "Perimeter of rectilinear shapes": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Area of shapes": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Pythagoras\' theorem": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
+    "Pythagoras\' theorem in other shapes": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Interior and exterior angles of polygons": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Reasoning with polygon angles": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     # Cross-domain: geometry with algebra
