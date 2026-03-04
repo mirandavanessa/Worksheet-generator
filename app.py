@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.51-fix_magic_component_write"
+BUILD_ID = "v39.52-pad-nohighlight-cssjs"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -1222,7 +1222,12 @@ def _render_canvas(slot: str, q) -> None:
     nonce = f"{slot}__v{int(st.session_state[ver_key])}__z{zoom:.2f}__m{mode}"
 
     html_block = f"""<!-- {nonce} -->
-<style>html,body{{margin:0;padding:0;background:#ffffff;}}</style>
+<style>
+html,body{{margin:0;padding:0;background:#ffffff; -webkit-tap-highlight-color: rgba(0,0,0,0);}}
+*{{-webkit-tap-highlight-color: rgba(0,0,0,0);}}
+#{dom_id}{{outline:none;}}
+canvas{{outline:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; touch-action:none;}}
+</style>
 <div id="{dom_id}" style="width:100%; height:{PAD_H}px; position:relative; background:#ffffff; border-radius:10px; overflow:hidden;">
   <img src="data:image/png;base64,{bg_b64}"
        style="position:absolute; left:0; top:0; width:100%; height:auto; pointer-events:none; user-select:none;" />
@@ -1237,6 +1242,33 @@ def _render_canvas(slot: str, q) -> None:
   if(!root) return;
   const canvas = root.querySelector('#draw');
   const ctx = canvas.getContext('2d');
+
+  // iPad/Safari: reduce focus/tap highlight on the component iframe/canvas.
+  try {{
+    const iframe = window.frameElement;
+    if (iframe) {{
+      iframe.style.outline = 'none';
+      iframe.style.border = '0';
+      iframe.style.boxShadow = 'none';
+      iframe.setAttribute('tabindex', '-1');
+    }}
+    const pdoc = window.parent && window.parent.document;
+    if (pdoc && !pdoc.getElementById('mw-pad-nohighlight-style')) {{
+      const st = pdoc.createElement('style');
+      st.id = 'mw-pad-nohighlight-style';
+      st.textContent = `
+        div[data-testid="stIFrame"] iframe {{ outline:none !important; border:none !important; box-shadow:none !important; }}
+        div[data-testid="stIFrame"] iframe:focus {{ outline:none !important; }}
+      `;
+      pdoc.head.appendChild(st);
+    }}
+    if (pdoc && pdoc.activeElement) {{ try {{ pdoc.activeElement.blur(); }} catch(e){{}} }}
+  }} catch(e){{}}
+
+  // Prevent iOS text selection / callout while drawing
+  canvas.addEventListener('touchstart', (e)=>{{ e.preventDefault(); }}, {{passive:false}});
+  canvas.addEventListener('touchmove', (e)=>{{ e.preventDefault(); }}, {{passive:false}});
+
 
   // Restore previous ink layer (PNG dataURL)
   try {{
@@ -1279,6 +1311,7 @@ def _render_canvas(slot: str, q) -> None:
     const [x,y] = getPos(ev);
     lastX = x; lastY = y;
     ev.preventDefault();
+    try {{ canvas.setPointerCapture(ev.pointerId); }} catch(e) {{}}
   }}
   function pointerMove(ev){{
     if(!drawing) return;
