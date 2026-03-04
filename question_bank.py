@@ -169,11 +169,23 @@ def _dashed_line(draw: ImageDraw.ImageDraw, p0: Tuple[float, float], p1: Tuple[f
         cur += dash + gap
 
 
-def _default_font(size: int = 40):
+def _default_font(size: int = 40, bold: bool = False):
+    """Reliable font loader for diagram labels.
+
+    Streamlit Cloud can miss system fonts; Matplotlib ships with DejaVu fonts.
+    """
     try:
-        return ImageFont.truetype("DejaVuSans.ttf", size=size)
+        from matplotlib import font_manager as fm
+
+        fp = fm.FontProperties(family="DejaVu Sans", weight=("bold" if bold else "normal"))
+        path = fm.findfont(fp, fallback_to_default=True)
+        return ImageFont.truetype(path, size=size)
     except Exception:
-        return ImageFont.load_default()
+        try:
+            fname = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+            return ImageFont.truetype(fname, size=size)
+        except Exception:
+            return ImageFont.load_default()
 
 
 def _img_bytes(img: Image.Image) -> bytes:

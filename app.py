@@ -885,14 +885,23 @@ def _instruction_line(slot: str, align: str = "left"):
 # ---------------- Canvas (embedded question background + height zoom) ----------------
 
 def _pil_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    """Best-effort font loader for embedded scratchpad question images."""
+    """Reliable font loader for embedded scratchpad question images.
+
+    Streamlit Cloud images can miss system font files. Matplotlib ships with
+    DejaVu fonts, so we resolve paths via matplotlib.font_manager.
+    """
     try:
-        fname = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
-        return ImageFont.truetype(fname, size=size)
+        from matplotlib import font_manager as fm
+
+        fp = fm.FontProperties(family="DejaVu Sans", weight=("bold" if bold else "normal"))
+        path = fm.findfont(fp, fallback_to_default=True)
+        return ImageFont.truetype(path, size=size)
     except Exception:
         try:
-            return ImageFont.truetype("DejaVuSans.ttf", size=size)
+            fname = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+            return ImageFont.truetype(fname, size=size)
         except Exception:
+            # NOTE: PIL's default bitmap font ignores requested size and will look tiny.
             return ImageFont.load_default()
 
 
@@ -946,6 +955,7 @@ def _question_bg_png(
     width_px: int,
     height_px: int,
     content_ratio: float = 0.42,
+    render_version: str = "v39.50",
 ) -> bytes:
     """
     Build a full-height scratchpad background:
@@ -970,8 +980,9 @@ def _question_bg_png(
         y = pad
         max_text_w = width_px - 2 * pad
 
-        # Prompt (keep footprint similar to the old on-page prompt)
-        prompt_font = _pil_font(max(16, int(72 * scale)), bold=True)
+        # Prompt text: keep readable relative to LaTeX.
+        # Use a larger base size and robust font path.
+        prompt_font = _pil_font(max(20, int(44 * scale)), bold=True)
         for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
             draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
             y += int(prompt_font.size * 1.18)
