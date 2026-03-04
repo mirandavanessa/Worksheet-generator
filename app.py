@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.43-diagramlabels-padheight"
+BUILD_ID = "v39.51-fix_magic_component_write"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -478,7 +478,8 @@ _render_scale_css(float(st.session_state.ui_scale))
 
 # ---------- Floating overlay timer + centre line (JS injection) ----------
 def _inject_overlay_timer():
-    components.html(
+    # Assign return value to avoid Streamlit "magic" auto-writing component values (can show "{}" on page).
+    _ = components.html(
         r"""
 <div style="display:none"></div>
 <script>
@@ -1305,7 +1306,8 @@ def _render_canvas(slot: str, q) -> None:
 </script>
 """
 
-    components.html(
+    # Assign return value to avoid Streamlit "magic" auto-writing component values (can show "{}" on page).
+    _ = components.html(
         html_block,
         height=PAD_H + 8,
     )
