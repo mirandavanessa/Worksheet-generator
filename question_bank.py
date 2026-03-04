@@ -287,7 +287,7 @@ def _rectangle_with_diagonal_diagram(L_top: str, W_left: str, diag_label: str) -
         nmag = 1.0
     nx, ny = nx / nmag, ny / nmag
     # Bigger offset to prevent the diagonal running through wide labels (e.g. '10').
-    off = 58
+    off = 70  # more whitespace between label and diagonal
     _label_center(draw, (mx + nx * off, my + ny * off), diag_label, font)
 
     return _img_bytes(img)
@@ -312,8 +312,14 @@ def _isosceles_height_diagram(equal_side: str, base: str, height_label: str) -> 
     _dashed_line(draw, C, foot, dash=10, gap=9, lw=3)
 
     # Right-angle marker
+    # Right-angle marker (complete square)
     ra = 16
-    draw.line([(foot[0], foot[1]), (foot[0] - ra, foot[1]), (foot[0] - ra, foot[1] - ra)], fill=_FG, width=3)
+    p1 = (foot[0] - ra, foot[1])
+    p2 = (foot[0] - ra, foot[1] - ra)
+    p3 = (foot[0], foot[1] - ra)
+    draw.line([foot, p1], fill=_FG, width=3)
+    draw.line([p1, p2], fill=_FG, width=3)
+    draw.line([p2, p3], fill=_FG, width=3)
 
     # Labels
     _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 32), base, font)
@@ -329,7 +335,7 @@ def _isosceles_height_diagram(equal_side: str, base: str, height_label: str) -> 
         nx1, ny1 = -nx1, -ny1
     mag1 = (nx1 * nx1 + ny1 * ny1) ** 0.5 or 1.0
     nx1, ny1 = nx1 / mag1, ny1 / mag1
-    _label_center(draw, (mx1 + nx1 * 28, my1 + ny1 * 28), equal_side, font)
+    _label_center(draw, (mx1 + nx1 * 34, my1 + ny1 * 34), equal_side, font)
 
     # Right side (B-C)
     mx2, my2 = (B[0] + C[0]) / 2, (B[1] + C[1]) / 2
@@ -339,10 +345,11 @@ def _isosceles_height_diagram(equal_side: str, base: str, height_label: str) -> 
         nx2, ny2 = -nx2, -ny2
     mag2 = (nx2 * nx2 + ny2 * ny2) ** 0.5 or 1.0
     nx2, ny2 = nx2 / mag2, ny2 / mag2
-    _label_center(draw, (mx2 + nx2 * 28, my2 + ny2 * 28), equal_side, font)
+    _label_center(draw, (mx2 + nx2 * 34, my2 + ny2 * 34), equal_side, font)
 
     # Height label (placed to the right of the dashed line)
-    _label_center(draw, (foot[0] + 55, (C[1] + foot[1]) / 2), height_label, font)
+    # Height label: closer to the dashed line
+    _label_center(draw, (foot[0] + 38, (C[1] + foot[1]) / 2), height_label, font)
 
     return _img_bytes(img)
 
@@ -440,49 +447,99 @@ def _kite_diagram(d1: str, d2: str) -> bytes:
     return _img_bytes(img)
 
 
-def _pythagoras_triangle_diagram(a_label: str, b_label: str, c_label: str) -> bytes:
+def _pythagoras_triangle_diagram(a_label: str, b_label: str, c_label: str, variant: Optional[int] = None) -> bytes:
     """Right-angled triangle diagram for Pythagoras' theorem.
 
-    Labels are placed adjacent to the relevant edges (no arrows / no dimension lines),
-    consistent with the EPP-style labelling used elsewhere in this project.
-    a_label = vertical leg, b_label = horizontal leg, c_label = hypotenuse.
+    Labels are placed adjacent to the relevant edges (no arrows / no dimension lines).
+
+    Supports multiple orientations for deliberate variation.
+    - a_label: one leg
+    - b_label: the other leg
+    - c_label: hypotenuse
     """
     img = Image.new("RGB", (700, 440), _BG)
     draw = ImageDraw.Draw(img)
     font = _default_font(44)
 
-    A = (160, 350)  # right angle
-    B = (560, 350)
-    C = (160, 90)
+    # Variants 0–3: axis-aligned corners. Variant 4: hypotenuse as the base.
+    v = 0 if variant is None else int(variant)
+    if v not in [0, 1, 2, 3, 4]:
+        v = 0
+
+    if v == 0:
+        A = (160, 350)  # right angle
+        B = (560, 350)
+        C = (160, 90)
+        leg1, leg2, hyp = (A, C), (A, B), (B, C)
+        ra_axes = ((1, 0), (0, -1))
+        a_seg, b_seg = leg1, leg2
+    elif v == 1:
+        A = (560, 350)
+        B = (160, 350)
+        C = (560, 90)
+        leg1, leg2, hyp = (A, C), (A, B), (B, C)
+        ra_axes = ((-1, 0), (0, -1))
+        a_seg, b_seg = leg1, leg2
+    elif v == 2:
+        A = (160, 90)
+        B = (560, 90)
+        C = (160, 350)
+        leg1, leg2, hyp = (A, C), (A, B), (B, C)
+        ra_axes = ((1, 0), (0, 1))
+        a_seg, b_seg = leg1, leg2
+    elif v == 3:
+        A = (560, 90)
+        B = (160, 90)
+        C = (560, 350)
+        leg1, leg2, hyp = (A, C), (A, B), (B, C)
+        ra_axes = ((-1, 0), (0, 1))
+        a_seg, b_seg = leg1, leg2
+    else:
+        A = (350, 90)   # right angle at apex
+        B = (170, 350)
+        C = (530, 350)
+        leg1, leg2, hyp = (A, B), (A, C), (B, C)
+        abx, aby = (B[0] - A[0]), (B[1] - A[1])
+        acx, acy = (C[0] - A[0]), (C[1] - A[1])
+        abm = (abx * abx + aby * aby) ** 0.5 or 1.0
+        acm = (acx * acx + acy * acy) ** 0.5 or 1.0
+        ra_axes = ((abx / abm, aby / abm), (acx / acm, acy / acm))
+        a_seg, b_seg = leg1, leg2
 
     # Triangle
     draw.line([A, B, C, A], fill=_FG, width=4)
 
-    # Right-angle marker at A
-    s = 30
-    draw.line([(A[0], A[1]), (A[0] + s, A[1])], fill=_FG, width=3)
-    draw.line([(A[0] + s, A[1]), (A[0] + s, A[1] - s)], fill=_FG, width=3)
-    draw.line([(A[0] + s, A[1] - s), (A[0], A[1] - s)], fill=_FG, width=3)
+    # Right-angle marker at A (tight + complete)
+    s = 24
+    ux1, uy1 = ra_axes[0]
+    ux2, uy2 = ra_axes[1]
+    p1 = (A[0] + ux1 * s, A[1] + uy1 * s)
+    p3 = (A[0] + ux2 * s, A[1] + uy2 * s)
+    p2 = (p1[0] + ux2 * s, p1[1] + uy2 * s)
+    draw.line([A, p1], fill=_FG, width=3)
+    draw.line([p1, p2], fill=_FG, width=3)
+    draw.line([p2, p3], fill=_FG, width=3)
 
-    # Labels (plain text)
-    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 30), b_label, font)          # base
-    _label_center(draw, (A[0] - 55, (A[1] + C[1]) / 2), a_label, font)           # height
+    def _seg_mid(p: Tuple[float, float], q: Tuple[float, float]) -> Tuple[float, float]:
+        return ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)
 
-    # Hypotenuse label: place at the midpoint of BC and push it *away* from A
-    # so it doesn't touch/overlap the hypotenuse.
-    mx, my = (B[0] + C[0]) / 2, (B[1] + C[1]) / 2
-    vx, vy = (C[0] - B[0]), (C[1] - B[1])
-    # Two candidate normals; choose the one pointing away from A.
-    nx, ny = vy, -vx
-    ax, ay = (A[0] - mx), (A[1] - my)
-    if (ax * nx + ay * ny) > 0:
-        nx, ny = -nx, -ny
-    nmag = (nx * nx + ny * ny) ** 0.5
-    if nmag == 0:
-        nmag = 1.0
-    nx, ny = nx / nmag, ny / nmag
-    offset = 36  # px; tuned to keep label near the edge but not touching
-    _label_center(draw, (mx + nx * offset, my + ny * offset), c_label, font)
+    def _label_off_segment(p: Tuple[float, float], q: Tuple[float, float], text: str, away_from: Tuple[float, float], off: float):
+        mx, my = _seg_mid(p, q)
+        vx, vy = (q[0] - p[0]), (q[1] - p[1])
+        nx, ny = (vy, -vx)
+        ax, ay = (away_from[0] - mx), (away_from[1] - my)
+        if (ax * nx + ay * ny) > 0:
+            nx, ny = -nx, -ny
+        nmag = (nx * nx + ny * ny) ** 0.5 or 1.0
+        nx, ny = nx / nmag, ny / nmag
+        _label_center(draw, (mx + nx * off, my + ny * off), text, font)
+
+    # Leg labels (slightly further from the line for visible white space)
+    _label_off_segment(a_seg[0], a_seg[1], a_label, _seg_mid(hyp[0], hyp[1]), 44)
+    _label_off_segment(b_seg[0], b_seg[1], b_label, _seg_mid(hyp[0], hyp[1]), 44)
+
+    # Hypotenuse label: increased offset for clear separation
+    _label_off_segment(hyp[0], hyp[1], c_label, A, 60)
 
     return _img_bytes(img)
 
@@ -1394,7 +1451,7 @@ def _gen_pyth_hyp_int(rng: random.Random, seed: int, params: Optional[Dict[str, 
     scale = rng.choice([1, 2, 3])
     a, b, c = a0 * scale, b0 * scale, c0 * scale
 
-    diagram = _pythagoras_triangle_diagram(str(a), str(b), "x")
+    diagram = _pythagoras_triangle_diagram(str(a), str(b), "x", variant=rng.choice([0, 1, 2, 3, 4]))
     prompt = "Find the length marked x (cm)."
     latex = ""
     answer = rf"x = {c}\ \mathrm{{cm}}"
@@ -1414,7 +1471,7 @@ def _gen_pyth_leg_int(rng: random.Random, seed: int, params: Optional[Dict[str, 
     a, b, c = a0 * scale, b0 * scale, c0 * scale
 
     # Find the base (b) given hypotenuse and vertical leg
-    diagram = _pythagoras_triangle_diagram(str(a), "x", str(c))
+    diagram = _pythagoras_triangle_diagram(str(a), "x", str(c), variant=rng.choice([0, 1, 2, 3, 4]))
     prompt = "Find the length marked x (cm)."
     latex = ""
     answer = rf"x = {b}\ \mathrm{{cm}}"
@@ -1428,6 +1485,27 @@ def _gen_pyth_leg_int(rng: random.Random, seed: int, params: Optional[Dict[str, 
     return prompt, latex, answer, working, diagram
 
 
+def _gen_pyth_other_leg_int(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Find the vertical leg given base and hypotenuse (integer answers)."""
+    triples = [(3, 4, 5), (5, 12, 13), (6, 8, 10), (8, 15, 17), (7, 24, 25)]
+    a0, b0, c0 = rng.choice(triples)
+    scale = rng.choice([1, 2, 3])
+    a, b, c = a0 * scale, b0 * scale, c0 * scale
+
+    diagram = _pythagoras_triangle_diagram("x", str(b), str(c), variant=rng.choice([0, 1, 2, 3, 4]))
+    prompt = "Find the length marked x (cm)."
+    latex = ""
+    answer = rf"x = {a}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Use Pythagoras' theorem."),
+        ("math", rf"{c}^2 = x^2 + {b}^2"),
+        ("math", rf"x^2 = {c}^2 - {b}^2"),
+        ("math", rf"x^2 = {c*c} - {b*b} = {a*a}"),
+        ("math", rf"x = \sqrt{{{a*a}}} = {a}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
 def _gen_pyth_hyp_surd(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
     # Choose legs so hypotenuse is not an integer (often simplifies).
     for _ in range(60):
@@ -1437,7 +1515,7 @@ def _gen_pyth_hyp_surd(rng: random.Random, seed: int, params: Optional[Dict[str,
         r = int(math.isqrt(n))
         if r*r != n and n <= 600:
             break
-    diagram = _pythagoras_triangle_diagram(str(a), str(b), "x")
+    diagram = _pythagoras_triangle_diagram(str(a), str(b), "x", variant=rng.choice([0, 1, 2, 3, 4]))
     prompt = "Find the length marked x (cm)."
     latex = ""
     surd = _sqrt_latex(n)
@@ -1462,7 +1540,7 @@ def _gen_pyth_leg_surd(rng: random.Random, seed: int, params: Optional[Dict[str,
         r = int(math.isqrt(n))
         if n > 0 and r*r != n and n <= 600:
             break
-    diagram = _pythagoras_triangle_diagram(str(a), "x", str(c))
+    diagram = _pythagoras_triangle_diagram(str(a), "x", str(c), variant=rng.choice([0, 1, 2, 3, 4]))
     prompt = "Find the length marked x (cm)."
     latex = ""
     surd = _sqrt_latex(n)
@@ -1472,6 +1550,33 @@ def _gen_pyth_leg_surd(rng: random.Random, seed: int, params: Optional[Dict[str,
         ("math", rf"{c}^2 = {a}^2 + x^2"),
         ("math", rf"x^2 = {c}^2 - {a}^2"),
         ("math", rf"x^2 = {c*c} - {a*a} = {n}"),
+        ("math", rf"x = \sqrt{{{n}}}"),
+    ]
+    if surd != rf"\sqrt{{{n}}}":
+        working.append(("math", rf"x = {surd}"))
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_pyth_other_leg_surd(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Find the vertical leg given base and hypotenuse (surd answers)."""
+    for _ in range(80):
+        c = rng.randint(10, 26)
+        b = rng.randint(4, c - 1)
+        n = c*c - b*b
+        r = int(math.isqrt(n))
+        if n > 0 and r*r != n and n <= 600:
+            break
+
+    diagram = _pythagoras_triangle_diagram("x", str(b), str(c), variant=rng.choice([0, 1, 2, 3, 4]))
+    prompt = "Find the length marked x (cm)."
+    latex = ""
+    surd = _sqrt_latex(n)
+    answer = rf"x = {surd}\ \mathrm{{cm}}"
+    working = [
+        ("text", "Use Pythagoras' theorem."),
+        ("math", rf"{c}^2 = x^2 + {b}^2"),
+        ("math", rf"x^2 = {c}^2 - {b}^2"),
+        ("math", rf"x^2 = {c*c} - {b*b} = {n}"),
         ("math", rf"x = \sqrt{{{n}}}"),
     ]
     if surd != rf"\sqrt{{{n}}}":
@@ -1500,7 +1605,54 @@ def _square_with_diagonal_diagram(diag_label: str) -> bytes:
     nmag = (nx * nx + ny * ny) ** 0.5 or 1.0
     nx, ny = nx / nmag, ny / nmag
     # Push far enough so the diagonal doesn't run through the label.
-    _label_center(draw, (mx + nx * 48, my + ny * 48), diag_label, font)
+    _label_center(draw, (mx + nx * 62, my + ny * 62), diag_label, font)
+
+    return _img_bytes(img)
+
+
+def _ladder_against_wall_diagram(base_label: str, height_label: str, ladder_label: str) -> bytes:
+    """Simple ladder-against-wall diagram (right triangle) with clear labels."""
+    img = Image.new("RGB", (680, 420), _BG)
+    draw = ImageDraw.Draw(img)
+    font = _default_font(42)
+
+    # Corner at the wall/ground
+    O = (170, 340)
+    G = (560, 340)   # ground point
+    W = (170, 90)    # wall top point
+
+    # Wall and ground (thin guide lines)
+    draw.line([O, (O[0], 55)], fill=_FG, width=4)
+    draw.line([O, (625, O[1])], fill=_FG, width=4)
+
+    # Ladder
+    draw.line([G, W], fill=_FG, width=4)
+
+    # Right angle marker at O (tight)
+    s = 22
+    p1 = (O[0] + s, O[1])
+    p3 = (O[0], O[1] - s)
+    p2 = (p1[0], p3[1])
+    draw.line([O, p1], fill=_FG, width=3)
+    draw.line([p1, p2], fill=_FG, width=3)
+    draw.line([p2, p3], fill=_FG, width=3)
+
+    # Base label (ground)
+    _label_center(draw, ((O[0] + G[0]) / 2, O[1] + 32), base_label, font)
+
+    # Height label (wall)
+    _label_center(draw, (O[0] - 55, (O[1] + W[1]) / 2), height_label, font)
+
+    # Ladder label: offset away from the corner O
+    mx, my = (G[0] + W[0]) / 2, (G[1] + W[1]) / 2
+    vx, vy = (W[0] - G[0]), (W[1] - G[1])
+    nx, ny = (vy, -vx)
+    ax, ay = (O[0] - mx), (O[1] - my)
+    if (ax * nx + ay * ny) > 0:
+        nx, ny = -nx, -ny
+    nmag = (nx * nx + ny * ny) ** 0.5 or 1.0
+    nx, ny = nx / nmag, ny / nmag
+    _label_center(draw, (mx + nx * 62, my + ny * 62), ladder_label, font)
 
     return _img_bytes(img)
 
@@ -1593,6 +1745,44 @@ def _gen_pyth_square_perimeter_surd(rng: random.Random, seed: int, params: Optio
         ("math", rf"P = 4\times \frac{{{d}}}{{\sqrt{{2}}}} = {perim}"),
     ]
     return prompt, latex, answer, working, diagram
+
+
+def _gen_pyth_ladder_worded(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Worded ladder problem (integer answers)."""
+    triples = [(3, 4, 5), (5, 12, 13), (6, 8, 10), (8, 15, 17)]
+    a0, b0, c0 = rng.choice(triples)
+    scale = rng.choice([1, 2, 3])
+    height, base, ladder = a0 * scale, b0 * scale, c0 * scale
+
+    # Randomise which length is unknown: height or base
+    if rng.random() < 0.5:
+        # unknown height
+        diagram = _ladder_against_wall_diagram(str(base), "x", str(ladder))
+        prompt = f"A ladder is {ladder} cm long and its base is {base} cm from a wall. Find the height, x cm, it reaches up the wall."
+        answer = rf"x = {height}\ \mathrm{{cm}}"
+        working = [
+            ("text", "Model the situation as a right-angled triangle."),
+            ("text", "Use Pythagoras' theorem."),
+            ("math", rf"{ladder}^2 = x^2 + {base}^2"),
+            ("math", rf"x^2 = {ladder}^2 - {base}^2"),
+            ("math", rf"x^2 = {ladder*ladder} - {base*base} = {height*height}"),
+            ("math", rf"x = \sqrt{{{height*height}}} = {height}"),
+        ]
+    else:
+        # unknown base
+        diagram = _ladder_against_wall_diagram("x", str(height), str(ladder))
+        prompt = f"A ladder is {ladder} cm long and it reaches {height} cm up a wall. Find the distance, x cm, between the base of the ladder and the wall."
+        answer = rf"x = {base}\ \mathrm{{cm}}"
+        working = [
+            ("text", "Model the situation as a right-angled triangle."),
+            ("text", "Use Pythagoras' theorem."),
+            ("math", rf"{ladder}^2 = {height}^2 + x^2"),
+            ("math", rf"x^2 = {ladder}^2 - {height}^2"),
+            ("math", rf"x^2 = {ladder*ladder} - {height*height} = {base*base}"),
+            ("math", rf"x = \sqrt{{{base*base}}} = {base}"),
+        ]
+
+    return prompt, "", answer, working, diagram
 
 
 # --- Finding fractions of an amount ---
@@ -1926,14 +2116,17 @@ TEMPLATES: List[Template] = [
     # Pythagoras' theorem
     Template("pyth_hyp_int", "Pythagoras' theorem", "hyp_int", "Find hypotenuse (integer)", 1, _gen_pyth_hyp_int),
     Template("pyth_leg_int", "Pythagoras' theorem", "leg_int", "Find a leg (integer)", 2, _gen_pyth_leg_int),
-    Template("pyth_hyp_surd", "Pythagoras' theorem", "hyp_surd", "Find hypotenuse (surd)", 3, _gen_pyth_hyp_surd),
-    Template("pyth_leg_surd", "Pythagoras' theorem", "leg_surd", "Find a leg (surd)", 4, _gen_pyth_leg_surd),
+    Template("pyth_other_leg_int", "Pythagoras' theorem", "other_leg_int", "Find the other leg (integer)", 3, _gen_pyth_other_leg_int),
+    Template("pyth_hyp_surd", "Pythagoras' theorem", "hyp_surd", "Find hypotenuse (surd)", 4, _gen_pyth_hyp_surd),
+    Template("pyth_leg_surd", "Pythagoras' theorem", "leg_surd", "Find a leg (surd)", 5, _gen_pyth_leg_surd),
+    Template("pyth_other_leg_surd", "Pythagoras' theorem", "other_leg_surd", "Find the other leg (surd)", 6, _gen_pyth_other_leg_surd),
 
     # Pythagoras' theorem (in other shapes / orientations)
     Template("pyth_rect_diag", "Pythagoras' theorem in other shapes", "rect_diag", "Rectangle diagonal (integer)", 1, _gen_pyth_rect_diag_int),
     Template("pyth_rect_side", "Pythagoras' theorem in other shapes", "rect_side", "Rectangle missing side (integer)", 2, _gen_pyth_rect_side_int),
     Template("pyth_isos_height", "Pythagoras' theorem in other shapes", "isos_height", "Isosceles triangle height (integer)", 3, _gen_pyth_isos_height_int),
-    Template("pyth_square_perim", "Pythagoras' theorem in other shapes", "sq_perim", "Square perimeter from diagonal (surd)", 4, _gen_pyth_square_perimeter_surd),
+    Template("pyth_ladder", "Pythagoras' theorem in other shapes", "ladder", "Ladder against wall (worded)", 4, _gen_pyth_ladder_worded),
+    Template("pyth_square_perim", "Pythagoras' theorem in other shapes", "sq_perim", "Square perimeter from diagonal (surd)", 5, _gen_pyth_square_perimeter_surd),
 
     # Fractions of an amount
     Template("frac_amt_proper", "Finding fractions of an amount", "proper", "Proper fractions (whole-number answers)", 1, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "proper"})),
