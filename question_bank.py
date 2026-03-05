@@ -349,6 +349,41 @@ def _isosceles_height_diagram(equal_side: str, base: str, height_label: str) -> 
 
     return _img_bytes(img)
 
+def _isosceles_triangle_diagram(equal_side: str, base: str) -> bytes:
+    """Isosceles triangle with side labels but NO height line.
+
+    Used when the question asks for the perpendicular height without showing it.
+    """
+    img = Image.new("RGB", (690, 390), _BG)
+    draw = ImageDraw.Draw(img)
+    font = _default_font(40)
+
+    A = (150, 300)
+    B = (540, 300)
+    C = (345, 90)
+    draw.line([A, B, C, A], fill=_FG, width=4)
+
+    # Base label
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 32), base, font)
+
+    # Equal side labels (place slightly outward from each sloping side)
+    cx, cy = (A[0] + B[0] + C[0]) / 3, (A[1] + B[1] + C[1]) / 3
+
+    def _place_side(P, Q):
+        mx, my = (P[0] + Q[0]) / 2, (P[1] + Q[1]) / 2
+        vx, vy = (Q[0] - P[0]), (Q[1] - P[1])
+        nx, ny = vy, -vx
+        if ((cx - mx) * nx + (cy - my) * ny) > 0:
+            nx, ny = -nx, -ny
+        mag = (nx * nx + ny * ny) ** 0.5 or 1.0
+        nx, ny = nx / mag, ny / mag
+        _label_center(draw, (mx + nx * 28, my + ny * 28), equal_side, font)
+
+    _place_side(A, C)
+    _place_side(B, C)
+
+    return _img_bytes(img)
+
 def _triangle_diagram(base: str, height: str) -> bytes:
     """Triangle with dashed perpendicular height and clear labels (no arrows)."""
     img = Image.new("RGB", (630, 360), _BG)
@@ -1570,7 +1605,7 @@ def _square_with_diagonal_diagram(diag_label: str) -> bytes:
     nmag = (nx * nx + ny * ny) ** 0.5 or 1.0
     nx, ny = nx / nmag, ny / nmag
     # Push far enough so the diagonal doesn't run through the label.
-    _label_center(draw, (mx + nx * 72, my + ny * 72), diag_label, font)
+    _label_center(draw, (mx + nx * 62, my + ny * 62), diag_label, font)
 
     return _img_bytes(img)
 
@@ -1625,18 +1660,18 @@ def _gen_pyth_isos_height_int(rng: random.Random, seed: int, params: Optional[Di
     half_base, height, side = hb0 * scale, h0 * scale, s0 * scale
     base = 2 * half_base
 
-    diagram = _isosceles_height_diagram(str(side), str(base), "x")
-    prompt = "Find the height marked x (cm)."
+    diagram = _isosceles_triangle_diagram(str(side), str(base))
+    prompt = "Find the perpendicular height of the isosceles triangle (cm)."
     latex = ""
-    answer = rf"x = {height}\ \mathrm{{cm}}"
+    answer = rf"\mathrm{{height}} = {height}\ \mathrm{{cm}}"
     working = [
         ("text", "The perpendicular height splits the base into two equal parts."),
         ("math", rf"\frac{{{base}}}{{2}} = {half_base}"),
         ("text", "Use Pythagoras' theorem on one of the right-angled triangles."),
-        ("math", rf"{side}^2 = x^2 + {half_base}^2"),
-        ("math", rf"x^2 = {side}^2 - {half_base}^2"),
-        ("math", rf"x^2 = {side*side} - {half_base*half_base} = {height*height}"),
-        ("math", rf"x = \sqrt{{{height*height}}} = {height}"),
+        ("math", rf"{side}^2 = h^2 + {half_base}^2"),
+        ("math", rf"h^2 = {side}^2 - {half_base}^2"),
+        ("math", rf"h^2 = {side*side} - {half_base*half_base} = {height*height}"),
+        ("math", rf"h = \sqrt{{{height*height}}} = {height}"),
     ]
     return prompt, latex, answer, working, diagram
 
@@ -1706,7 +1741,7 @@ def _ladder_diagram(base_label: str, height_label: str, ladder_label: str) -> by
 
     _place_on_segment(A, B, base_label, 40)
     _place_on_segment(A, C, height_label, 40)
-    _place_on_segment(B, C, ladder_label, 70)
+    _place_on_segment(B, C, ladder_label, 62)
 
     return _img_bytes(img)
 
@@ -1728,7 +1763,7 @@ def _gen_pyth_ladder_int(rng: random.Random, seed: int, params: Optional[Dict[st
         ("math", rf"{ladder}^2 = x^2 + {base}^2"),
         ("math", rf"x^2 = {ladder}^2 - {base}^2"),
         ("math", rf"x^2 = {ladder*ladder} - {base*base} = {height*height}"),
-        ("math", rf"x = \sqrt{{{height*height}}} = {height}"),
+        ("math", rf"h = \sqrt{{{height*height}}} = {height}"),
     ]
     return prompt, latex, answer, working, diagram
 
@@ -1771,10 +1806,10 @@ def _right_trapezium_slant_diagram(top_base: str, bottom_base: str, height: str,
         nx, ny = -nx, -ny
     mag = (nx * nx + ny * ny) ** 0.5 or 1.0
     nx, ny = nx / mag, ny / mag
-    _label_center(draw, (mx + nx * 72, my + ny * 72), slant_label, font)
+    _label_center(draw, (mx + nx * 62, my + ny * 62), slant_label, font)
 
     # Height label: keep close to the dashed line
-    _label_center(draw, (E[0] + 28, (C[1] + E[1]) / 2), height, font)
+    _label_center(draw, (E[0] - 28, (C[1] + E[1]) / 2), height, font)
 
     return _img_bytes(img)
 
@@ -1828,25 +1863,42 @@ def _gen_pyth_tv_ratio(rng: random.Random, seed: int, params: Optional[Dict[str,
 # --- Finding fractions of an amount ---
 
 def _gen_frac_of_amount_numeric(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    level = (params or {}).get("level", "proper")
+    """Numeric 'fraction of an amount' questions with a clearer difficulty ramp.
 
-    if level == "proper":
+    Levels:
+    - unit_easy: unit fractions with small amounts
+    - nonunit_easy: non-unit proper fractions with small amounts
+    - nonunit_harder: non-unit proper fractions with larger amounts (often reducible fractions)
+    - improper: improper fractions (mixed-number answers possible)
+    """
+    level = (params or {}).get("level", "unit_easy")
+
+    if level == "unit_easy":
+        den = rng.choice([2, 3, 4, 5, 6, 8, 10])
+        num = 1
+        amount = den * rng.randint(4, 20)  # small, friendly multiples
+
+    elif level == "nonunit_easy":
+        den = rng.choice([3, 4, 5, 6, 8, 10, 12])
+        # Prefer simplest fractions here (avoid obvious cancelling most of the time)
+        candidates = [n for n in range(2, den) if math.gcd(n, den) == 1]
+        num = rng.choice(candidates) if candidates else rng.randint(2, den - 1)
+        amount = den * rng.randint(4, 18)
+
+    elif level == "nonunit_harder":
+        den = rng.choice([6, 8, 9, 10, 12, 15, 16, 18, 20, 24])
+        # Often choose a reducible numerator so simplifying is natural
+        reducible = [n for n in range(2, den) if math.gcd(n, den) > 1]
+        if reducible and rng.random() < 0.7:
+            num = rng.choice(reducible)
+        else:
+            num = rng.randint(2, den - 1)
+        amount = den * rng.randint(10, 45)
+
+    else:  # improper
         den = rng.choice([2, 3, 4, 5, 6, 8, 10, 12])
-        num = rng.randint(1, den - 1)
-        k = rng.randint(5, 25)
-        amount = den * k
-    elif level == "proper_simplify":
-        # Choose a fraction that can simplify after multiplying
-        den = rng.choice([6, 8, 9, 10, 12, 15, 16])
-        num = rng.choice([2, 3, 4, 5, 6, 7])
-        num = min(num, den - 1)
-        k = rng.randint(4, 18)
-        amount = den * k
-    else:  # "improper"
-        den = rng.choice([2, 3, 4, 5, 6, 8])
-        num = rng.randint(den + 1, 2 * den + 3)
-        k = rng.randint(4, 18)
-        amount = den * k
+        num = rng.randint(den + 1, 2 * den + 5)
+        amount = den * rng.randint(6, 25)
 
     frac = Fraction(num, den)
     result = frac * amount
@@ -1855,31 +1907,81 @@ def _gen_frac_of_amount_numeric(rng: random.Random, seed: int, params: Optional[
     latex = rf"\frac{{{num}}}{{{den}}}\ \mathrm{{of}}\ {amount}"
     answer = _sanitize_math(_fmt_frac(result))
 
+    # Working (kept consistent for all levels)
     unit = amount // den
     working: List[WorkingStep] = [
         ("text", f"Find 1/{den} of {amount} first."),
         ("math", rf"{amount} \div {den} = {unit}"),
-        ("text", rf"Multiply by {num}."),
-        ("math", rf"{unit} \times {num} = {_sanitize_math(_fmt_frac(result))}"),
     ]
+
+    if num != 1:
+        working.extend([
+            ("text", rf"Multiply by {num}."),
+            ("math", rf"{unit} \times {num} = {answer}"),
+        ])
+    else:
+        working.append(("math", rf"\frac{{1}}{{{den}}}\ \mathrm{{of}}\ {amount} = {answer}"))
+
     return prompt, latex, answer, working
-
-
 def _gen_frac_of_amount_worded(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
-    level = (params or {}).get("level", "easy")
+    """Worded fraction-of-amount questions.
 
-    contexts = []
-    if level == "easy":
-        contexts = ["marbles", "sweets", "students", "books"]
+    IMPORTANT: Do NOT add an extra 'fraction of amount' line under the question.
+    All information must be contained in the worded prompt (latex field left blank).
+
+    Levels:
+    - unit_easy: very simple unit-fraction contexts
+    - nonunit: non-unit proper fractions in straightforward contexts
+    - inverse: the fractional part is given; find the whole (multi-step)
+    """
+    level = (params or {}).get("level", "unit_easy")
+
+    # Keep totals as clean multiples where appropriate.
+    items = ["sweets", "marbles", "stickers", "books", "students"]
+
+    if level == "unit_easy":
         den = rng.choice([2, 3, 4, 5, 6, 8, 10])
-        num = rng.randint(1, den - 1)
-        amount = den * rng.randint(6, 24)
-        item = rng.choice(contexts)
-        prompt = f"There are {amount} {item}. {num}/{den} of them are in group A. How many are in group A?"
-        latex = rf"\frac{{{num}}}{{{den}}}\ \mathrm{{of}}\ {amount}"
-        unit = amount // den
+        num = 1
+        amount = den * rng.randint(4, 18)
+        item = rng.choice(items)
+        prompt = f"There are {amount} {item}. 1/{den} of them are in group A. How many are in group A?"
+
         result = Fraction(num, den) * amount
         answer = _sanitize_math(_fmt_frac(result))
+        latex = ""
+
+        unit = amount // den
+        working: List[WorkingStep] = [
+            ("text", f"Find 1/{den} of {amount}."),
+            ("math", rf"{amount} \div {den} = {unit}"),
+            ("math", rf"\frac{{1}}{{{den}}}\ \mathrm{{of}}\ {amount} = {answer}"),
+        ]
+        return prompt, latex, answer, working
+
+    if level == "nonunit":
+        den = rng.choice([3, 4, 5, 6, 8, 10, 12])
+        candidates = [n for n in range(2, den) if math.gcd(n, den) == 1]
+        num = rng.choice(candidates) if candidates else rng.randint(2, den - 1)
+        amount = den * rng.randint(5, 22)
+
+        if rng.random() < 0.6:
+            item = rng.choice(items)
+            prompt = f"There are {amount} {item}. {num}/{den} of them are in group A. How many are in group A?"
+            unit_name = ""
+        else:
+            amount_pounds = amount
+            prompt = f"A jacket costs £{amount_pounds}. In a sale, {num}/{den} of the price is taken off. How much money is taken off?"
+            unit_name = "pounds"
+
+        result = Fraction(num, den) * amount
+        latex = ""
+
+        if unit_name:
+            answer = rf"{_sanitize_math(_fmt_frac(result))}\ \mathrm{{{unit_name}}}"
+        else:
+            answer = _sanitize_math(_fmt_frac(result))
+
+        unit = amount // den
         working: List[WorkingStep] = [
             ("text", f"Find 1/{den} of {amount} first."),
             ("math", rf"{amount} \div {den} = {unit}"),
@@ -1888,39 +1990,42 @@ def _gen_frac_of_amount_worded(rng: random.Random, seed: int, params: Optional[D
         ]
         return prompt, latex, answer, working
 
-    # Money/measure contexts (a bit more GCSE-like)
-    den = rng.choice([4, 5, 8, 10, 16])
-    num = rng.randint(1, den - 1)
-    if rng.random() < 0.5:
-        # Money
-        pounds = den * rng.randint(6, 30)
-        amount = pounds
-        result = Fraction(num, den) * amount
-        prompt = f"A jacket costs £{amount}. Work out {num}/{den} of the price." 
-        latex = rf"\frac{{{num}}}{{{den}}}\ \mathrm{{of}}\ {amount}"
-        answer = rf"{_sanitize_math(_fmt_frac(result))}\ \mathrm{{pounds}}"
-        unit = amount // den
-        working = [
-            ("text", f"Find 1/{den} of {amount} first."),
-            ("math", rf"{amount} \div {den} = {unit}"),
-            ("text", rf"Multiply by {num}."),
-            ("math", rf"{unit} \times {num} = {_sanitize_math(_fmt_frac(result))}"),
+    # inverse (harder)
+    den = rng.choice([3, 4, 5, 6, 8, 10, 12])
+    # Prefer non-unit fractions here
+    candidates = [n for n in range(2, den) if math.gcd(n, den) == 1]
+    num = rng.choice(candidates) if candidates else rng.randint(2, den - 1)
+    total = den * rng.randint(6, 25)
+    part = int(Fraction(num, den) * total)
+
+    variant = rng.choice(["counts", "money"])
+    if variant == "counts":
+        item = rng.choice(items)
+        prompt = f"{num}/{den} of the {item} are in group A. There are {part} in group A. How many {item} are there altogether?"
+        answer = str(total)
+        latex = ""
+        # Working: find 1/den by dividing by num, then multiply by den
+        working: List[WorkingStep] = [
+            ("text", f"{part} represents {num}/{den} of the total."),
+            ("text", f"First find 1/{den} by dividing by {num}."),
+            ("math", rf"{part} \div {num} = {total // den}"),
+            ("text", f"Now multiply by {den} to get the whole."),
+            ("math", rf"{total // den} \times {den} = {total}"),
         ]
         return prompt, latex, answer, working
     else:
-        # Volume/mass
-        unit_name = rng.choice(["ml", "g", "cm"])  # simple units
-        amount = den * rng.randint(8, 40)
-        result = Fraction(num, den) * amount
-        prompt = f"A container holds {amount}{unit_name}. Work out {num}/{den} of this amount." 
-        latex = rf"\frac{{{num}}}{{{den}}}\ \mathrm{{of}}\ {amount}"
-        answer = rf"{_sanitize_math(_fmt_frac(result))}\ \mathrm{{{unit_name}}}"
-        unit = amount // den
-        working = [
-            ("text", f"Find 1/{den} of {amount} first."),
-            ("math", rf"{amount} \div {den} = {unit}"),
-            ("text", rf"Multiply by {num}."),
-            ("math", rf"{unit} \times {num} = {_sanitize_math(_fmt_frac(result))}"),
+        # Money version
+        total_money = total
+        spent = part
+        prompt = f"A student spends {num}/{den} of their money. They spend £{spent}. How much money did they have at the start?"
+        latex = ""
+        answer = rf"{total_money}\ \mathrm{{pounds}}"
+        working: List[WorkingStep] = [
+            ("text", f"£{spent} represents {num}/{den} of the total."),
+            ("text", f"First find 1/{den} by dividing by {num}."),
+            ("math", rf"{spent} \div {num} = {total_money // den}"),
+            ("text", f"Now multiply by {den} to get the whole."),
+            ("math", rf"{total_money // den} \times {den} = {total_money}"),
         ]
         return prompt, latex, answer, working
 
@@ -2168,14 +2273,15 @@ TEMPLATES: List[Template] = [
 Template("pyth_ladder", "Pythagoras' theorem in other shapes", "ladder", "Ladder against a wall (worded, integer)", 2, _gen_pyth_ladder_int),
 Template("pyth_trap_slant", "Pythagoras' theorem in other shapes", "trap_slant", "Right-angled trapezium side (integer)", 3, _gen_pyth_trapezium_slant_int),
 Template("pyth_tv_ratio", "Pythagoras' theorem in other shapes", "tv_ratio", "Screen ratio (worded)", 4, _gen_pyth_tv_ratio),
-
     # Fractions of an amount
-    Template("frac_amt_proper", "Finding fractions of an amount", "proper", "Proper fractions (whole-number answers)", 1, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "proper"})),
-    Template("frac_amt_simpl", "Finding fractions of an amount", "proper_simpl", "Proper fractions (include simplifying)", 2, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "proper_simplify"})),
-    Template("frac_amt_improper", "Finding fractions of an amount", "improper", "Improper fractions", 3, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "improper"})),
+    Template("frac_amt_unit", "Finding fractions of an amount", "unit", "Unit fractions (small numbers)", 1, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "unit_easy"})),
+    Template("frac_amt_nonunit_small", "Finding fractions of an amount", "nonunit_small", "Non-unit fractions (small numbers)", 2, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "nonunit_easy"})),
+    Template("frac_amt_nonunit_harder", "Finding fractions of an amount", "nonunit_harder", "Non-unit fractions (harder)", 3, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "nonunit_harder"})),
+    Template("frac_amt_improper", "Finding fractions of an amount", "improper", "Improper fractions", 4, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "improper"})),
 
-    Template("frac_amt_word_easy", "Finding fractions of an amount (worded)", "easy", "Worded (counts)", 1, lambda r, s, p: _gen_frac_of_amount_worded(r, s, {"level": "easy"})),
-    Template("frac_amt_word_ctx", "Finding fractions of an amount (worded)", "context", "Worded (money / measure)", 2, lambda r, s, p: _gen_frac_of_amount_worded(r, s, {"level": "context"})),
+    Template("frac_amt_word_unit", "Finding fractions of an amount (worded)", "unit", "Worded (unit fractions)", 1, lambda r, s, p: _gen_frac_of_amount_worded(r, s, {"level": "unit_easy"})),
+    Template("frac_amt_word_nonunit", "Finding fractions of an amount (worded)", "nonunit", "Worded (non-unit fractions)", 2, lambda r, s, p: _gen_frac_of_amount_worded(r, s, {"level": "nonunit"})),
+    Template("frac_amt_word_inverse", "Finding fractions of an amount (worded)", "inverse", "Worded (find the whole)", 3, lambda r, s, p: _gen_frac_of_amount_worded(r, s, {"level": "inverse"})),
 
     Template("perim_all", "Perimeter of rectilinear shapes", "all", "All sides given", 1, _gen_rect_perim_all),
     Template("perim_missing", "Perimeter of rectilinear shapes", "missing", "Missing sides to work out", 2, _gen_rect_perim_missing),
@@ -2438,7 +2544,7 @@ def generate_questions_by_template(
 
 
 # --- Module diagnostics (prints to Streamlit logs) ---
-QB_BUILD = "v39-qbank-black-diagrams-unique-pairs"
+QB_BUILD = "v39.56_pyth_label_tweaks_fraction_ramp"
 try:
     print(f"QB_BUILD={QB_BUILD}")
     print("QB_TOPICS=" + " | ".join(available_topics()))
