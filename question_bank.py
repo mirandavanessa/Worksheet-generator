@@ -603,7 +603,13 @@ def _draw_angle_arc(
     amid = a1 + d / 2
     lx = Vp[0] + (r + label_push) * math.cos(amid)
     ly = Vp[1] + (r + label_push) * math.sin(amid)
-    _label_center(draw, (lx, -ly), label, font)
+    # Convert back to screen coords (y down). Keep the label comfortably separated
+    # from the vertex so it doesn't collide with the rays (common at bottom corners).
+    sx, sy = lx, -ly
+    min_sep = 34  # px separation from vertex in screen-y direction
+    if abs(sy - vy) < min_sep:
+        sy = (vy - min_sep) if sy < vy else (vy + min_sep)
+    _label_center(draw, (sx, sy), label, font)
 
 
 def _trig_right_triangle_diagram(
@@ -644,7 +650,7 @@ def _trig_right_triangle_diagram(
     # Triangle
     draw.line([A, B, C, A], fill=_FG, width=4)
 
-    # Right-angle marker at A
+    # Right-angle marker at A (size scales with the triangle so it always looks like a square)
     def _unit(P, Q):
         dx, dy = (Q[0] - P[0]), (Q[1] - P[1])
         mag = (dx * dx + dy * dy) ** 0.5 or 1.0
@@ -652,7 +658,10 @@ def _trig_right_triangle_diagram(
 
     ux, uy = _unit(A, B)
     vx, vy = _unit(A, C)
-    s = 28
+    # Scale: ~12% of the shorter adjacent leg, clamped.
+    len_ab = ((B[0] - A[0]) ** 2 + (B[1] - A[1]) ** 2) ** 0.5
+    len_ac = ((C[0] - A[0]) ** 2 + (C[1] - A[1]) ** 2) ** 0.5
+    s = int(max(30, min(46, 0.12 * min(len_ab, len_ac))))
     p1 = (A[0] + ux * s, A[1] + uy * s)
     p2 = (p1[0] + vx * s, p1[1] + vy * s)
     p3 = (A[0] + vx * s, A[1] + vy * s)
@@ -678,10 +687,11 @@ def _trig_right_triangle_diagram(
     _place_on_segment(B, C, c_label, 60)
 
     # Angle arc at the chosen acute vertex
+    # Larger arc, label placed INSIDE the arc (negative push) so it sits in the white space.
     if angle_vertex == "B":
-        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=34, lw=3, label_push=16)
+        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=70, lw=3, label_push=42)
     else:
-        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=34, lw=3, label_push=16)
+        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=70, lw=3, label_push=42)
 
     return _img_bytes(img)
 
@@ -712,7 +722,7 @@ def _trig_elevation_diagram(distance_label: str, angle_label: str, height_label:
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of elevation at B between BA (ground) and BC (line of sight)
-    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=34, lw=3, label_push=16)
+    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=70, lw=3, label_push=42)
 
     return _img_bytes(img)
 
@@ -2284,7 +2294,7 @@ def _trig_depression_diagram(height_label: str, angle_label: str, distance_label
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of depression at C between horizontal CD and line of sight CB
-    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=34, lw=3, label_push=16)
+    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=70, lw=3, label_push=42)
 
     return _img_bytes(img)
 
@@ -3013,7 +3023,7 @@ def generate_questions_by_template(
 
 
 # --- Module diagnostics (prints to Streamlit logs) ---
-QB_BUILD = "v39.58-trig-levels-qprompt-small-only"
+QB_BUILD = "v39.59-trig-angle-arc-font-fix"
 try:
     print(f"QB_BUILD={QB_BUILD}")
     print("QB_TOPICS=" + " | ".join(available_topics()))
