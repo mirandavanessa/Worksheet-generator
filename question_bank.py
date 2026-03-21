@@ -554,6 +554,168 @@ def _pythagoras_triangle_diagram(a_label: str, b_label: str, c_label: str, orien
 
     return _img_bytes(img)
 
+
+def _draw_angle_arc(
+    draw: ImageDraw.ImageDraw,
+    V: Tuple[float, float],
+    P: Tuple[float, float],
+    Q: Tuple[float, float],
+    label: str,
+    font: ImageFont.ImageFont,
+    r: float = 36,
+    lw: int = 3,
+    label_push: float = 18,
+) -> None:
+    """Draw a small arc at vertex V between rays V->P and V->Q (minor angle).
+
+    Uses a polyline arc in *mathematical* coordinates (y up) then maps back to
+    screen coords (y down). This avoids PIL's arc angle-direction quirks.
+    """
+    if not label:
+        return
+
+    vx, vy = V
+    # Convert to math coords (y up)
+    Vp = (vx, -vy)
+    Pp = (P[0], -P[1])
+    Qp = (Q[0], -Q[1])
+
+    a1 = math.atan2(Pp[1] - Vp[1], Pp[0] - Vp[0])
+    a2 = math.atan2(Qp[1] - Vp[1], Qp[0] - Vp[0])
+
+    # Smallest signed difference in [-pi, pi]
+    d = (a2 - a1 + math.pi) % (2 * math.pi) - math.pi
+    # Ensure we draw the smaller (minor) angle
+    if abs(d) > math.pi:
+        d = d - 2 * math.pi if d > 0 else d + 2 * math.pi
+
+    steps = 16
+    pts = []
+    for i in range(steps + 1):
+        t = i / steps
+        a = a1 + d * t
+        x = Vp[0] + r * math.cos(a)
+        y = Vp[1] + r * math.sin(a)
+        pts.append((x, -y))
+
+    draw.line(pts, fill=_FG, width=lw)
+
+    amid = a1 + d / 2
+    lx = Vp[0] + (r + label_push) * math.cos(amid)
+    ly = Vp[1] + (r + label_push) * math.sin(amid)
+    _label_center(draw, (lx, -ly), label, font)
+
+
+def _trig_right_triangle_diagram(
+    a_label: str,
+    b_label: str,
+    c_label: str,
+    angle_vertex: str,
+    angle_label: str,
+    orientation: str = "BL",
+) -> bytes:
+    """Right-angled triangle for SOHCAHTOA questions.
+
+    Side mapping (same as Pythagoras diagram):
+    - a_label labels the leg AC
+    - b_label labels the leg AB
+    - c_label labels the hypotenuse BC
+
+    `angle_vertex` is "B" or "C" (the acute angle shown).
+    """
+    img = Image.new("RGB", (700, 440), _BG)
+    draw = ImageDraw.Draw(img)
+    font = _default_font(44)
+    ang_font = _default_font(38)
+
+    if orientation == "BL":
+        A, B, C = (160, 350), (560, 350), (160, 90)
+    elif orientation == "BR":
+        A, B, C = (560, 350), (160, 350), (560, 90)
+    elif orientation == "TL":
+        A, B, C = (160, 90), (560, 90), (160, 350)
+    elif orientation == "TR":
+        A, B, C = (560, 90), (160, 90), (560, 350)
+    elif orientation == "HB":
+        A, B, C = (360, 90), (160, 350), (560, 350)
+    else:
+        A, B, C = (160, 350), (560, 350), (160, 90)
+
+    # Triangle
+    draw.line([A, B, C, A], fill=_FG, width=4)
+
+    # Right-angle marker at A
+    def _unit(P, Q):
+        dx, dy = (Q[0] - P[0]), (Q[1] - P[1])
+        mag = (dx * dx + dy * dy) ** 0.5 or 1.0
+        return dx / mag, dy / mag
+
+    ux, uy = _unit(A, B)
+    vx, vy = _unit(A, C)
+    s = 28
+    p1 = (A[0] + ux * s, A[1] + uy * s)
+    p2 = (p1[0] + vx * s, p1[1] + vy * s)
+    p3 = (A[0] + vx * s, A[1] + vy * s)
+    draw.line([A, p1, p2, p3], fill=_FG, width=3)
+
+    # Side labels (push away from centroid)
+    cx, cy = (A[0] + B[0] + C[0]) / 3, (A[1] + B[1] + C[1]) / 3
+
+    def _place_on_segment(P, Q, label: str, offset: float):
+        if label == "":
+            return
+        mx, my = (P[0] + Q[0]) / 2, (P[1] + Q[1]) / 2
+        vx0, vy0 = (Q[0] - P[0]), (Q[1] - P[1])
+        nx, ny = vy0, -vx0
+        if ((cx - mx) * nx + (cy - my) * ny) > 0:
+            nx, ny = -nx, -ny
+        nmag = (nx * nx + ny * ny) ** 0.5 or 1.0
+        nx, ny = nx / nmag, ny / nmag
+        _label_center(draw, (mx + nx * offset, my + ny * offset), label, font)
+
+    _place_on_segment(A, C, a_label, 44)
+    _place_on_segment(A, B, b_label, 44)
+    _place_on_segment(B, C, c_label, 60)
+
+    # Angle arc at the chosen acute vertex
+    if angle_vertex == "B":
+        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=34, lw=3, label_push=16)
+    else:
+        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=34, lw=3, label_push=16)
+
+    return _img_bytes(img)
+
+
+def _trig_elevation_diagram(distance_label: str, angle_label: str, height_label: str = "x") -> bytes:
+    """Angle of elevation style diagram (building + ground + line of sight)."""
+    img = Image.new("RGB", (760, 420), _BG)
+    draw = ImageDraw.Draw(img)
+    font = _default_font(44)
+    ang_font = _default_font(38)
+
+    # Coordinates
+    A = (170, 320)   # base of building (right angle)
+    B = (590, 320)   # observer on ground
+    C = (170, 110)   # top of building
+
+    # Ground + building + line of sight
+    draw.line([A, B], fill=_FG, width=4)
+    draw.line([A, C], fill=_FG, width=4)
+    draw.line([B, C], fill=_FG, width=4)
+
+    # Right angle at A
+    ra = 26
+    draw.line([A, (A[0] + ra, A[1]), (A[0] + ra, A[1] - ra), (A[0], A[1] - ra)], fill=_FG, width=3)
+
+    # Labels: distance on ground, height on building
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 34), distance_label, font)
+    _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
+
+    # Angle of elevation at B between BA (ground) and BC (line of sight)
+    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=34, lw=3, label_push=16)
+
+    return _img_bytes(img)
+
 @dataclass(frozen=True)
 class GeneratedQuestion:
     qid: str
@@ -1860,6 +2022,294 @@ def _gen_pyth_tv_ratio(rng: random.Random, seed: int, params: Optional[Dict[str,
     ]
     return prompt, latex, answer, working, None
 
+
+# --- Trigonometry (right-angled triangles) ---
+
+def _fmt_dp(x: float, dp: int = 1) -> str:
+    """Fixed dp formatting (GCSE style)."""
+    if abs(x) < 5e-10:
+        x = 0.0
+    return f"{x:.{dp}f}"
+
+
+def _gen_trig_find_side(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Find a missing side using sin/cos/tan given one angle and one side.
+
+    mode_set:
+      - denom_known: the side in the denominator is known; numerator is x
+      - numer_known: the side in the numerator is known; denominator is x
+      - mixed: mixture of both
+    """
+    family = (params or {}).get("family", "mixed")
+    mode_set = (params or {}).get("mode_set", "mixed")
+    angle = rng.choice([25, 30, 35, 40, 45, 50, 55, 60])
+    orient = rng.choice(["BL", "BR", "TL", "TR", "HB"])
+    angle_vertex = rng.choice(["B", "C"])  # which acute angle is shown
+
+    # Core modes
+    denom_known_modes = ["sin_opp_from_hyp", "cos_adj_from_hyp", "tan_opp_from_adj"]
+    numer_known_modes = ["sin_hyp_from_opp", "cos_hyp_from_adj", "tan_adj_from_opp"]
+
+    if family == "sin_cos":
+        denom_known_modes = ["sin_opp_from_hyp", "cos_adj_from_hyp"]
+        numer_known_modes = ["sin_hyp_from_opp", "cos_hyp_from_adj"]
+    elif family == "tan":
+        denom_known_modes = ["tan_opp_from_adj"]
+        numer_known_modes = ["tan_adj_from_opp"]
+
+    if mode_set == "denom_known":
+        modes = denom_known_modes
+    elif mode_set == "numer_known":
+        modes = numer_known_modes
+    else:
+        modes = denom_known_modes + numer_known_modes
+
+    mode = rng.choice(modes)
+
+    hyp = rng.randint(8, 20)
+    adj = rng.randint(6, 20)
+    opp = rng.randint(6, 20)
+
+    if angle_vertex == "B":
+        # At B: opposite=AC (a_label), adjacent=AB (b_label), hyp=BC (c_label)
+        if mode == "sin_opp_from_hyp":
+            x = hyp * math.sin(math.radians(angle))
+            diagram = _trig_right_triangle_diagram("x", "", str(hyp), "B", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use sine: opposite over hypotenuse."),
+                ("math", rf"\sin({angle}^\circ)=\frac{{x}}{{{hyp}}}"),
+                ("math", rf"x={hyp}\sin({angle}^\circ)"),
+            ]
+        elif mode == "cos_adj_from_hyp":
+            x = hyp * math.cos(math.radians(angle))
+            diagram = _trig_right_triangle_diagram("", "x", str(hyp), "B", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use cosine: adjacent over hypotenuse."),
+                ("math", rf"\cos({angle}^\circ)=\frac{{x}}{{{hyp}}}"),
+                ("math", rf"x={hyp}\cos({angle}^\circ)"),
+            ]
+        elif mode == "tan_opp_from_adj":
+            x = adj * math.tan(math.radians(angle))
+            diagram = _trig_right_triangle_diagram("x", str(adj), "", "B", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use tangent: opposite over adjacent."),
+                ("math", rf"\tan({angle}^\circ)=\frac{{x}}{{{adj}}}"),
+                ("math", rf"x={adj}\tan({angle}^\circ)"),
+            ]
+        elif mode == "sin_hyp_from_opp":
+            # sin = opp/hyp  => hyp = opp / sin
+            x = opp / math.sin(math.radians(angle))
+            diagram = _trig_right_triangle_diagram(str(opp), "", "x", "B", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use sine: opposite over hypotenuse."),
+                ("math", rf"\sin({angle}^\circ)=\frac{{{opp}}}{{x}}"),
+                ("math", rf"x=\frac{{{opp}}}{{\sin({angle}^\circ)}}"),
+            ]
+        elif mode == "cos_hyp_from_adj":
+            # cos = adj/hyp => hyp = adj / cos
+            x = adj / math.cos(math.radians(angle))
+            diagram = _trig_right_triangle_diagram("", str(adj), "x", "B", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use cosine: adjacent over hypotenuse."),
+                ("math", rf"\cos({angle}^\circ)=\frac{{{adj}}}{{x}}"),
+                ("math", rf"x=\frac{{{adj}}}{{\cos({angle}^\circ)}}"),
+            ]
+        else:
+            x = opp / math.tan(math.radians(angle))
+            diagram = _trig_right_triangle_diagram(str(opp), "x", "", "B", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use tangent: opposite over adjacent."),
+                ("math", rf"\tan({angle}^\circ)=\frac{{{opp}}}{{x}}"),
+                ("math", rf"x=\frac{{{opp}}}{{\tan({angle}^\circ)}}"),
+            ]
+    else:
+        # At C: opposite=AB (b_label), adjacent=AC (a_label), hyp=BC (c_label)
+        if mode == "sin_opp_from_hyp":
+            x = hyp * math.sin(math.radians(angle))
+            diagram = _trig_right_triangle_diagram("", "x", str(hyp), "C", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use sine: opposite over hypotenuse."),
+                ("math", rf"\sin({angle}^\circ)=\frac{{x}}{{{hyp}}}"),
+                ("math", rf"x={hyp}\sin({angle}^\circ)"),
+            ]
+        elif mode == "cos_adj_from_hyp":
+            x = hyp * math.cos(math.radians(angle))
+            diagram = _trig_right_triangle_diagram("x", "", str(hyp), "C", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use cosine: adjacent over hypotenuse."),
+                ("math", rf"\cos({angle}^\circ)=\frac{{x}}{{{hyp}}}"),
+                ("math", rf"x={hyp}\cos({angle}^\circ)"),
+            ]
+        elif mode == "tan_opp_from_adj":
+            x = adj * math.tan(math.radians(angle))
+            diagram = _trig_right_triangle_diagram(str(adj), "x", "", "C", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use tangent: opposite over adjacent."),
+                ("math", rf"\tan({angle}^\circ)=\frac{{x}}{{{adj}}}"),
+                ("math", rf"x={adj}\tan({angle}^\circ)"),
+            ]
+        elif mode == "sin_hyp_from_opp":
+            x = opp / math.sin(math.radians(angle))
+            diagram = _trig_right_triangle_diagram("", str(opp), "x", "C", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use sine: opposite over hypotenuse."),
+                ("math", rf"\sin({angle}^\circ)=\frac{{{opp}}}{{x}}"),
+                ("math", rf"x=\frac{{{opp}}}{{\sin({angle}^\circ)}}"),
+            ]
+        elif mode == "cos_hyp_from_adj":
+            x = adj / math.cos(math.radians(angle))
+            diagram = _trig_right_triangle_diagram(str(adj), "", "x", "C", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use cosine: adjacent over hypotenuse."),
+                ("math", rf"\cos({angle}^\circ)=\frac{{{adj}}}{{x}}"),
+                ("math", rf"x=\frac{{{adj}}}{{\cos({angle}^\circ)}}"),
+            ]
+        else:
+            x = opp / math.tan(math.radians(angle))
+            diagram = _trig_right_triangle_diagram("x", str(opp), "", "C", f"{angle}°", orientation=orient)
+            working = [
+                ("text", "Use tangent: opposite over adjacent."),
+                ("math", rf"\tan({angle}^\circ)=\frac{{{opp}}}{{x}}"),
+                ("math", rf"x=\frac{{{opp}}}{{\tan({angle}^\circ)}}"),
+            ]
+
+    prompt = "Find the length marked x (cm). Give your answer to 1 decimal place."
+    latex = ""
+    answer = rf"x = {_fmt_dp(x,1)}\ \mathrm{{cm}}"
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_trig_find_angle(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Find a missing acute angle in a right-angled triangle using inverse trig."""
+    orient = rng.choice(["BL", "BR", "TL", "TR", "HB"])
+    angle_vertex = rng.choice(["B", "C"])
+    mode = rng.choice(["asin", "acos", "atan"])
+
+    if mode in ("asin", "acos"):
+        hyp = rng.randint(10, 25)
+        small = rng.randint(5, hyp - 2)
+        if mode == "asin":
+            theta = math.degrees(math.asin(small / hyp))
+            if angle_vertex == "B":
+                diagram = _trig_right_triangle_diagram(str(small), "", str(hyp), "B", "x°", orientation=orient)
+            else:
+                diagram = _trig_right_triangle_diagram("", str(small), str(hyp), "C", "x°", orientation=orient)
+            working = [
+                ("text", "Use sine (inverse)."),
+                ("math", rf"\sin(x^\circ)=\frac{{{small}}}{{{hyp}}}"),
+                ("math", rf"x=\sin^{{-1}}\!\left(\frac{{{small}}}{{{hyp}}}\right)"),
+            ]
+        else:
+            theta = math.degrees(math.acos(small / hyp))
+            if angle_vertex == "B":
+                diagram = _trig_right_triangle_diagram("", str(small), str(hyp), "B", "x°", orientation=orient)
+            else:
+                diagram = _trig_right_triangle_diagram(str(small), "", str(hyp), "C", "x°", orientation=orient)
+            working = [
+                ("text", "Use cosine (inverse)."),
+                ("math", rf"\cos(x^\circ)=\frac{{{small}}}{{{hyp}}}"),
+                ("math", rf"x=\cos^{{-1}}\!\left(\frac{{{small}}}{{{hyp}}}\right)"),
+            ]
+    else:
+        adj = rng.randint(6, 20)
+        opp = rng.randint(6, 20)
+        theta = math.degrees(math.atan(opp / adj))
+        if angle_vertex == "B":
+            diagram = _trig_right_triangle_diagram(str(opp), str(adj), "", "B", "x°", orientation=orient)
+        else:
+            diagram = _trig_right_triangle_diagram(str(adj), str(opp), "", "C", "x°", orientation=orient)
+        working = [
+            ("text", "Use tangent (inverse)."),
+            ("math", rf"\tan(x^\circ)=\frac{{{opp}}}{{{adj}}}"),
+            ("math", rf"x=\tan^{{-1}}\!\left(\frac{{{opp}}}{{{adj}}}\right)"),
+        ]
+
+    prompt = "Find the angle marked x (°). Give your answer to 1 decimal place."
+    latex = ""
+    answer = rf"x = {_fmt_dp(theta,1)}^\circ"
+    return prompt, latex, answer, working, diagram
+
+
+def _gen_trig_angle_of_elevation(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Worded angle-of-elevation problem (uses tan)."""
+    dist = rng.choice([12, 15, 18, 20, 25, 30])
+    angle = rng.choice([25, 30, 35, 40, 45, 50])
+    height = dist * math.tan(math.radians(angle))
+
+    diagram = _trig_elevation_diagram(distance_label=f"{dist} m", angle_label=f"{angle}°", height_label="x")
+    prompt = (
+        f"A person stands {dist} m from a building. The angle of elevation to the top is {angle}°. "
+        f"Find the height of the building (m). Give your answer to 1 decimal place."
+    )
+    latex = ""
+    answer = rf"x = {_fmt_dp(height,1)}\ \mathrm{{m}}"
+    working = [
+        ("text", "Use tangent: opposite over adjacent."),
+        ("math", rf"\tan({angle}^\circ)=\frac{{x}}{{{dist}}}"),
+        ("math", rf"x={dist}\tan({angle}^\circ)"),
+    ]
+    return prompt, latex, answer, working, diagram
+
+
+def _trig_depression_diagram(height_label: str, angle_label: str, distance_label: str = "x") -> bytes:
+    """Angle of depression diagram (cliff/lighthouse + horizontal reference at the top)."""
+    img = Image.new("RGB", (760, 420), _BG)
+    draw = ImageDraw.Draw(img)
+    font = _default_font(44)
+    ang_font = _default_font(38)
+
+    # Coordinates
+    A = (170, 320)   # base of cliff (right angle)
+    B = (590, 320)   # object on ground/sea
+    C = (170, 110)   # top of cliff
+    D = (590, 110)   # horizontal reference point from C
+
+    # Ground + cliff
+    draw.line([A, B], fill=_FG, width=4)
+    draw.line([A, C], fill=_FG, width=4)
+    # Line of sight
+    draw.line([C, B], fill=_FG, width=4)
+
+    # Horizontal reference at the top (dashed)
+    dash = 12
+    for x in range(C[0], D[0], dash * 2):
+        draw.line([(x, C[1]), (min(x + dash, D[0]), C[1])], fill=_FG, width=2)
+
+    # Right angle at A
+    ra = 26
+    draw.line([A, (A[0] + ra, A[1]), (A[0] + ra, A[1] - ra), (A[0], A[1] - ra)], fill=_FG, width=3)
+
+    # Labels
+    _label_center(draw, ((A[0] + B[0]) / 2, A[1] + 34), distance_label, font)
+    _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
+
+    # Angle of depression at C between horizontal CD and line of sight CB
+    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=34, lw=3, label_push=16)
+
+    return _img_bytes(img)
+
+
+def _gen_trig_angle_of_depression(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
+    """Worded angle-of-depression problem (uses tan after linking to angle of elevation)."""
+    height = rng.choice([10, 12, 15, 18, 20, 24, 30, 36, 40, 45])
+    angle = rng.choice([25, 30, 35, 40, 45, 50])
+    dist = height / math.tan(math.radians(angle))
+
+    diagram = _trig_depression_diagram(height_label=f"{height} m", angle_label=f"{angle}°", distance_label="x m")
+    prompt = (
+        f"From the top of a cliff {height} m high, the angle of depression to a boat is {angle}°. "
+        f"Find the horizontal distance from the base of the cliff to the boat (m). Give your answer to 1 decimal place."
+    )
+    latex = ""
+    answer = rf"x = {_fmt_dp(dist,1)}\ \mathrm{{m}}"
+    working = [
+        ("text", "Angle of depression equals the angle of elevation."),
+        ("text", "Use tangent: opposite over adjacent."),
+        ("math", rf"\tan({angle}^\circ)=\frac{{{height}}}{{x}}"),
+        ("math", rf"x=\frac{{{height}}}{{\tan({angle}^\circ)}}"),
+    ]
+    return prompt, latex, answer, working, diagram
+
 # --- Finding fractions of an amount ---
 
 def _gen_frac_of_amount_numeric(rng: random.Random, seed: int, params: Optional[Dict[str, Any]]):
@@ -2273,6 +2723,23 @@ TEMPLATES: List[Template] = [
 Template("pyth_ladder", "Pythagoras' theorem in other shapes", "ladder", "Ladder against a wall (worded, integer)", 2, _gen_pyth_ladder_int),
 Template("pyth_trap_slant", "Pythagoras' theorem in other shapes", "trap_slant", "Right-angled trapezium side (integer)", 3, _gen_pyth_trapezium_slant_int),
 Template("pyth_tv_ratio", "Pythagoras' theorem in other shapes", "tv_ratio", "Screen ratio (worded)", 4, _gen_pyth_tv_ratio),
+
+    # Trigonometry (right-angled triangles)
+    # L1: denominator known (x on the numerator)
+    Template("trig_L1_denom", "Trigonometry (right-angled triangles)", "L1", "Find a side (sin/cos/tan) — denominator known", 1,
+             lambda r, s, p: _gen_trig_find_side(r, s, {"family": "mixed", "mode_set": "denom_known"})),
+    # L2: numerator known (x on the denominator)
+    Template("trig_L2_numer", "Trigonometry (right-angled triangles)", "L2", "Find a side (sin/cos/tan) — numerator known", 2,
+             lambda r, s, p: _gen_trig_find_side(r, s, {"family": "mixed", "mode_set": "numer_known"})),
+    # L3: mixture of both
+    Template("trig_L3_mix", "Trigonometry (right-angled triangles)", "L3", "Find a side (mixed)", 3,
+             lambda r, s, p: _gen_trig_find_side(r, s, {"family": "mixed", "mode_set": "mixed"})),
+    # L4: find an angle
+    Template("trig_L4_angle", "Trigonometry (right-angled triangles)", "L4", "Find an angle (inverse trig)", 4, _gen_trig_find_angle),
+    # L5–L6: worded problems
+    Template("trig_L5_elev", "Trigonometry (right-angled triangles)", "L5", "Word problem 1 — angle of elevation", 5, _gen_trig_angle_of_elevation),
+    Template("trig_L6_depr", "Trigonometry (right-angled triangles)", "L6", "Word problem 2 — angle of depression", 5, _gen_trig_angle_of_depression),
+
     # Fractions of an amount
     Template("frac_amt_unit", "Finding fractions of an amount", "unit", "Unit fractions (small numbers)", 1, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "unit_easy"})),
     Template("frac_amt_nonunit_small", "Finding fractions of an amount", "nonunit_small", "Non-unit fractions (small numbers)", 2, lambda r, s, p: _gen_frac_of_amount_numeric(r, s, {"level": "nonunit_easy"})),
@@ -2317,6 +2784,7 @@ TOPIC_ORDER: List[str] = [
     "Area of shapes",
     "Pythagoras' theorem",
     "Pythagoras' theorem in other shapes",
+    "Trigonometry (right-angled triangles)",
     "Interior and exterior angles of polygons",
     "Reasoning with polygon angles",
     "Algebraic geometry and angle equations",
@@ -2365,6 +2833,7 @@ TOPIC_STRANDS: Dict[str, Dict[str, Any]] = {
     "Area of shapes": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Pythagoras\' theorem": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Pythagoras\' theorem in other shapes": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
+    "Trigonometry (right-angled triangles)": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Interior and exterior angles of polygons": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     "Reasoning with polygon angles": {"primary": "Geometry and measures", "tags": ["Geometry and measures"]},
     # Cross-domain: geometry with algebra
@@ -2544,7 +3013,7 @@ def generate_questions_by_template(
 
 
 # --- Module diagnostics (prints to Streamlit logs) ---
-QB_BUILD = "v39.56_pyth_label_tweaks_fraction_ramp"
+QB_BUILD = "v39.58-trig-levels-qprompt-small-only"
 try:
     print(f"QB_BUILD={QB_BUILD}")
     print("QB_TOPICS=" + " | ".join(available_topics()))

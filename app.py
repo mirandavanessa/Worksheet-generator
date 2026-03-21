@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.52-pad-nohighlight-cssjs"
+BUILD_ID = "v39.58-trig-levels-qprompt-small-only"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -501,6 +501,19 @@ def _inject_overlay_timer():
       -webkit-user-select:none;
       -webkit-touch-callout:none;
     }
+
+/* Question prompt / instruction text
+   - .q-prompt: normal (matches overall scaling)
+   - .q-prompt-small: ~30% smaller (used when scratchpad is hidden and in practice mode)
+*/
+.q-prompt, .q-prompt * {
+    font-size: {1.15*scale:.2f}rem !important;
+    line-height: 1.18 !important;
+}
+.q-prompt-small, .q-prompt-small * {
+    font-size: {0.70*1.15*scale:.2f}rem !important;
+    line-height: 1.18 !important;
+}
     #mw-centerline{
       position:fixed;
       top:0;
@@ -981,9 +994,9 @@ def _question_bg_png(
         y = pad
         max_text_w = width_px - 2 * pad
 
-        # Prompt text: keep readable relative to LaTeX.
-        # Use a larger base size and robust font path.
-        prompt_font = _pil_font(max(20, int(44 * scale)), bold=True)
+        # Prompt (instruction) text: reduced default size (~30%) to match user preference.
+        # Keep readable relative to LaTeX and consistent across iPad/desktop.
+        prompt_font = _pil_font(max(18, int(31 * scale)), bold=True)
         for line in _wrap_pil_text(draw, _pretty_text(prompt.strip()), prompt_font, max_text_w):
             draw.text((pad, y), line, fill=(0, 0, 0, 255), font=prompt_font)
             y += int(prompt_font.size * 1.18)
@@ -1405,7 +1418,7 @@ def _render_practice_mode():
             with target_col:
                 q = qs[i]
                 prompt_txt = html.escape(_pretty_text(q.prompt))
-                st.markdown(f"<p><span class='prac-num'>{i+1}.</span> <strong>{prompt_txt}</strong></p>", unsafe_allow_html=True)
+                st.markdown(f"<p class='q-prompt-small'><span class='prac-num'>{i+1}.</span> <strong>{prompt_txt}</strong></p>", unsafe_allow_html=True)
                 if q.latex.strip():
                     st.latex(q.latex)
                 if getattr(q, "diagram_png", None):
@@ -1750,7 +1763,10 @@ for topic in ordered_topics:
             if st.session_state.get(draw1_key, False):
                 _render_canvas(slot1, q1)
             else:
-                st.markdown(f"**{_pretty_text(q1.prompt)}**")
+                st.markdown(
+                    f"<div class='q-prompt-small'><strong>{html.escape(_pretty_text(q1.prompt))}</strong></div>",
+                    unsafe_allow_html=True,
+                )
                 if q1.latex.strip():
                     st.latex(q1.latex)
                 if getattr(q1, "diagram_png", None):
@@ -1830,7 +1846,10 @@ for topic in ordered_topics:
                 if st.session_state.get(draw2_key, False):
                     _render_canvas(slot2, q2)
                 else:
-                    st.markdown(f"**{_pretty_text(q2.prompt)}**")
+                    st.markdown(
+                        f"<div class='q-prompt-small'><strong>{html.escape(_pretty_text(q2.prompt))}</strong></div>",
+                        unsafe_allow_html=True,
+                    )
                     if q2.latex.strip():
                         st.latex(q2.latex)
                     if getattr(q2, "diagram_png", None):
