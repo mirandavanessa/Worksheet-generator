@@ -693,9 +693,10 @@ def _trig_right_triangle_diagram(
     # (Previous build used an oversized radius; this is the intended doubled-radius value.)
     if angle_vertex == "B":
         # Arc radius + label placement tuned for clean GCSE-style spacing.
-        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=100, lw=3, label_push=-38)
+        # Arc radius tuned to keep label clear of sides without looking oversized.
+        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=80, lw=3, label_push=-30)
     else:
-        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=100, lw=3, label_push=-38)
+        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=80, lw=3, label_push=-30)
 
     return _img_bytes(img)
 
@@ -726,7 +727,7 @@ def _trig_elevation_diagram(distance_label: str, angle_label: str, height_label:
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of elevation at B between BA (ground) and BC (line of sight)
-    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=100, lw=3, label_push=-38)
+    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=80, lw=3, label_push=-30)
 
     return _img_bytes(img)
 
@@ -2298,7 +2299,7 @@ def _trig_depression_diagram(height_label: str, angle_label: str, distance_label
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of depression at C between horizontal CD and line of sight CB
-    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=100, lw=3, label_push=-38)
+    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=80, lw=3, label_push=-30)
 
     return _img_bytes(img)
 
@@ -3027,7 +3028,7 @@ def generate_questions_by_template(
 
 
 # --- Module diagnostics (prints to Streamlit logs) ---
-QB_BUILD = "v39.63-arc-radius-100-katex-safe-answers"
+QB_BUILD = "v39.64-fix-fstring-css-braces-arc-radius-80"
 try:
     print(f"QB_BUILD={QB_BUILD}")
     print("QB_TOPICS=" + " | ".join(available_topics()))

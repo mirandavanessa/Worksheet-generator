@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.63-fix-practice-latex-color-and-arc-radius"
+BUILD_ID = "v39.64-fix-css-fstring-braces-practice-latex-arc80"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -475,8 +475,9 @@ div[data-testid="stMarkdownContainer"] .q-working * {{
     font-size: {aw_em:.3f}em !important;
 }}
 
-/* Answers shown in green (match previous behaviour) WITHOUT using LaTeX color commands.
-   Using \color{#...} can break KaTeX/MathJax parsing and display raw LaTeX text. */
+/* Answers shown in green (match previous behaviour) WITHOUT using LaTeX colour commands.
+   Using a LaTeX \\color command with a hex value can break KaTeX/MathJax parsing
+   and may display raw LaTeX text instead. */
 .mw-ans, .mw-ans .katex, .mw-ans .katex-display > .katex {{
     color: #00b050 !important;
 }}
