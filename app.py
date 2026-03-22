@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.60-ans30-arc2x-prac20"
+BUILD_ID = "v39.61-scale-fix-answork-10pct-trigHB"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -401,6 +401,12 @@ def _pretty_text(s: str) -> str:
 # ---------- UI scale (font size) ----------
 def _render_scale_css(scale: float) -> None:
     """Scale question text + maths for readability (iPad-first)."""
+    # Keep external (non-scratchpad) question prompts close to the embedded scratchpad size,
+    # but still responsive to the +/- controls. Answers/working should be ~10% larger.
+    q_rem = 0.35 * float(scale)          # ui_scale=3.0 -> ~1.05rem
+    aw_rem = 1.10 * q_rem                # ~10% larger than question text
+    q_em = 0.35 * float(scale)           # ui_scale=3.0 -> ~1.05em (KaTeX)
+    aw_em = 1.10 * q_em
     st.markdown(
         f"""
 <style>
@@ -429,19 +435,50 @@ div[data-testid="stMarkdownContainer"] ul {{ margin: 0 0 0.10rem 1.2rem !importa
 div[data-testid="stMarkdownContainer"] li {{ margin: 0 0 0.08rem 0 !important; }}
 
 /* Question prompt text shown when scratchpad is hidden / in practice mode.
-   Do NOT scale this with ui_scale; match the embedded scratchpad prompt size. */
+   Match the embedded scratchpad prompt size, but still scale with +/- controls. */
 /* Make this selector more specific than the global markdown scaling rules. */
 div[data-testid="stMarkdownContainer"] .q-prompt,
 div[data-testid="stMarkdownContainer"] .q-prompt * {{
-    font-size: 1.05rem !important;
+    font-size: {q_rem:.3f}rem !important;
     line-height: 1.18 !important;
     margin: 0 !important;
 }}
 div[data-testid="stMarkdownContainer"] .q-prompt-small,
 div[data-testid="stMarkdownContainer"] .q-prompt-small * {{
-    font-size: 1.05rem !important;
+    font-size: {q_rem:.3f}rem !important;
     line-height: 1.18 !important;
     margin: 0 !important;
+}}
+
+/* Answer + working text: ~10% larger than the question prompt, and scalable */
+div[data-testid="stMarkdownContainer"] .q-answer,
+div[data-testid="stMarkdownContainer"] .q-answer * {{
+    font-size: {aw_rem:.3f}rem !important;
+    line-height: 1.18 !important;
+    margin: 0 !important;
+}}
+div[data-testid="stMarkdownContainer"] .q-working,
+div[data-testid="stMarkdownContainer"] .q-working * {{
+    font-size: {aw_rem:.3f}rem !important;
+    line-height: 1.18 !important;
+    margin: 0 !important;
+}}
+
+/* KaTeX scaling INSIDE our question/answer blocks (override global KaTeX scaling) */
+.mw-math .katex, .mw-math .katex-display > .katex {{
+    font-size: {q_em:.3f}em !important;
+}}
+.mw-ans .katex, .mw-ans .katex-display > .katex,
+.mw-work-math .katex, .mw-work-math .katex-display > .katex {{
+    font-size: {aw_em:.3f}em !important;
+}}
+
+/* Small label text (Answer / Working headings) */
+.aw-label {{
+  font-size: 0.95rem !important;
+  line-height: 1.15 !important;
+  margin: 0.2rem 0 0.15rem 0 !important;
+  font-weight: 700;
 }}
 
 /* Captions + labels */
@@ -470,6 +507,24 @@ section[data-testid="stSidebar"] .stCaption {{
 """,
         unsafe_allow_html=True,
     )
+
+
+def _render_math_block(latex: str, cls: str = "mw-math") -> None:
+    """Render display-style math in a wrapper div so we can CSS-scale it safely."""
+    if not latex or not str(latex).strip():
+        return
+    st.markdown(f"<div class='{cls}'>$$ {latex} $$</div>", unsafe_allow_html=True)
+
+
+def _render_diagram_scaled(diagram_png: bytes, ui_scale: float) -> None:
+    """Render a diagram with a width that responds to +/- controls."""
+    if not diagram_png:
+        return
+    # Half-page column on iPad: ~520px feels right at default ui_scale=3.0.
+    base = 520
+    k = max(0.60, min(1.50, float(ui_scale) / 3.0))
+    width = int(max(240, min(720, base * k)))
+    st.image(diagram_png, width=width)
 
 def _scale_controls_row(key_prefix: str) -> None:
     """Text-size controls (no tooltips)."""
@@ -1414,6 +1469,8 @@ def _render_practice_mode():
     else:
         qs = st.session_state.practice_questions
 
+    ui_scale = float(st.session_state.get("ui_scale", 3.0))
+
     for row in range(10):
         left_idx = 2 * row
         right_idx = 2 * row + 1
@@ -1425,9 +1482,9 @@ def _render_practice_mode():
                 prompt_txt = html.escape(_pretty_text(q.prompt))
                 st.markdown(f"<p class='q-prompt'><span class='prac-num'>{i+1}.</span> <strong>{prompt_txt}</strong></p>", unsafe_allow_html=True)
                 if q.latex.strip():
-                    st.latex(q.latex)
+                    _render_math_block(q.latex, cls="mw-math")
                 if getattr(q, "diagram_png", None):
-                    st.image(q.diagram_png, use_column_width=True)
+                    _render_diagram_scaled(q.diagram_png, ui_scale=ui_scale)
 
                 ans_key = f"prac_ans__{i}"
                 _set_default(ans_key, False)
@@ -1447,7 +1504,10 @@ def _render_practice_mode():
                     st.rerun()
 
                 if st.session_state[ans_key]:
-                    cAns.latex(rf"{{\scriptsize \color{{#008000}}{{{qs[i].answer_latex}}}}}")
+                    cAns.markdown(
+                        rf"<div class='mw-ans'>$$ \color{{#008000}}{{{qs[i].answer_latex}}} $$</div>",
+                        unsafe_allow_html=True,
+                    )
                 else:
                     cAns.markdown("&nbsp;", unsafe_allow_html=True)
 
@@ -1773,21 +1833,21 @@ for topic in ordered_topics:
                     unsafe_allow_html=True,
                 )
                 if q1.latex.strip():
-                    st.latex(q1.latex)
+                    _render_math_block(q1.latex, cls="mw-math")
                 if getattr(q1, "diagram_png", None):
-                    st.image(q1.diagram_png, use_column_width=True)
+                    _render_diagram_scaled(q1.diagram_png, ui_scale=float(st.session_state.get("ui_scale", 3.0)))
 
             if st.session_state[ans1_key]:
-                st.markdown("**Answer:**")
-                st.latex(rf'{{\scriptsize {q1.answer_latex}}}')
+                st.markdown("<div class='aw-label'>Answer</div>", unsafe_allow_html=True)
+                _render_math_block(rf"{q1.answer_latex}", cls="mw-ans")
 
             if st.session_state[work1_key]:
-                st.markdown("**Working:**")
+                st.markdown("<div class='aw-label'>Working</div>", unsafe_allow_html=True)
                 for kind, content in q1.working:
                     if kind == "text":
-                        st.markdown(f"- {content}")
+                        st.markdown(f"<div class='q-working'>&bull; {html.escape(str(content))}</div>", unsafe_allow_html=True)
                     else:
-                        st.latex(content)
+                        _render_math_block(str(content), cls="mw-work-math")
 
 
     # Q2
@@ -1856,21 +1916,21 @@ for topic in ordered_topics:
                         unsafe_allow_html=True,
                     )
                     if q2.latex.strip():
-                        st.latex(q2.latex)
+                        _render_math_block(q2.latex, cls="mw-math")
                     if getattr(q2, "diagram_png", None):
-                        st.image(q2.diagram_png, use_column_width=True)
+                        _render_diagram_scaled(q2.diagram_png, ui_scale=float(st.session_state.get("ui_scale", 3.0)))
 
                 if st.session_state[ans2_key]:
-                    st.markdown("**Answer:**")
-                    st.latex(rf'{{\scriptsize {q2.answer_latex}}}')
+                    st.markdown("<div class='aw-label'>Answer</div>", unsafe_allow_html=True)
+                    _render_math_block(rf"{q2.answer_latex}", cls="mw-ans")
 
                 if st.session_state[work2_key]:
-                    st.markdown("**Working:**")
+                    st.markdown("<div class='aw-label'>Working</div>", unsafe_allow_html=True)
                     for kind, content in q2.working:
                         if kind == "text":
-                            st.markdown(f"- {content}")
+                            st.markdown(f"<div class='q-working'>&bull; {html.escape(str(content))}</div>", unsafe_allow_html=True)
                         else:
-                            st.latex(content)
+                            _render_math_block(str(content), cls="mw-work-math")
 
 
     st.markdown(f"<div style='height: {GAP_VH}vh'></div>", unsafe_allow_html=True)

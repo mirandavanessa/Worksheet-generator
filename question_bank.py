@@ -643,7 +643,9 @@ def _trig_right_triangle_diagram(
     elif orientation == "TR":
         A, B, C = (560, 90), (160, 90), (560, 350)
     elif orientation == "HB":
-        A, B, C = (360, 90), (160, 350), (560, 350)
+        # Hypotenuse as the base (BC), right angle at A.
+        # Ensure AB ⟂ AC so the right angle is visually correct.
+        A, B, C = (360, 150), (160, 350), (560, 350)
     else:
         A, B, C = (160, 350), (560, 350), (160, 90)
 
@@ -658,10 +660,10 @@ def _trig_right_triangle_diagram(
 
     ux, uy = _unit(A, B)
     vx, vy = _unit(A, C)
-    # Scale: ~12% of the shorter adjacent leg, clamped.
+    # Scale: ~16% of the shorter adjacent leg, clamped (clear square/rectangle marker).
     len_ab = ((B[0] - A[0]) ** 2 + (B[1] - A[1]) ** 2) ** 0.5
     len_ac = ((C[0] - A[0]) ** 2 + (C[1] - A[1]) ** 2) ** 0.5
-    s = int(max(30, min(46, 0.12 * min(len_ab, len_ac))))
+    s = int(max(34, min(60, 0.16 * min(len_ab, len_ac))))
     p1 = (A[0] + ux * s, A[1] + uy * s)
     p2 = (p1[0] + vx * s, p1[1] + vy * s)
     p3 = (A[0] + vx * s, A[1] + vy * s)
@@ -688,10 +690,11 @@ def _trig_right_triangle_diagram(
 
     # Angle arc at the chosen acute vertex
     # Larger arc, label placed INSIDE the arc (negative push) so it sits in the white space.
+    # Angle arc: radius doubled; label pushed inside the arc's white space.
     if angle_vertex == "B":
-        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=140, lw=3, label_push=-50)
+        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=280, lw=3, label_push=-100)
     else:
-        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=140, lw=3, label_push=-50)
+        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=280, lw=3, label_push=-100)
 
     return _img_bytes(img)
 
@@ -722,7 +725,7 @@ def _trig_elevation_diagram(distance_label: str, angle_label: str, height_label:
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of elevation at B between BA (ground) and BC (line of sight)
-    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=140, lw=3, label_push=-50)
+    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=280, lw=3, label_push=-100)
 
     return _img_bytes(img)
 
@@ -2294,7 +2297,7 @@ def _trig_depression_diagram(height_label: str, angle_label: str, distance_label
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of depression at C between horizontal CD and line of sight CB
-    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=140, lw=3, label_push=-50)
+    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=280, lw=3, label_push=-100)
 
     return _img_bytes(img)
 
