@@ -688,13 +688,14 @@ def _trig_right_triangle_diagram(
     _place_on_segment(A, B, b_label, 44)
     _place_on_segment(B, C, c_label, 60)
 
-    # Angle arc at the chosen acute vertex
-    # Larger arc, label placed INSIDE the arc (negative push) so it sits in the white space.
-    # Angle arc: radius doubled; label pushed inside the arc's white space.
+    # Angle arc at the chosen acute vertex.
+    # Keep a clear "white pocket" between arc and sides for the label.
+    # (Previous build used an oversized radius; this is the intended doubled-radius value.)
     if angle_vertex == "B":
-        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=280, lw=3, label_push=-100)
+        # Arc radius + label placement tuned for clean GCSE-style spacing.
+        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=100, lw=3, label_push=-38)
     else:
-        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=280, lw=3, label_push=-100)
+        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=100, lw=3, label_push=-38)
 
     return _img_bytes(img)
 
@@ -725,7 +726,7 @@ def _trig_elevation_diagram(distance_label: str, angle_label: str, height_label:
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of elevation at B between BA (ground) and BC (line of sight)
-    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=280, lw=3, label_push=-100)
+    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=100, lw=3, label_push=-38)
 
     return _img_bytes(img)
 
@@ -2297,7 +2298,7 @@ def _trig_depression_diagram(height_label: str, angle_label: str, distance_label
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of depression at C between horizontal CD and line of sight CB
-    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=280, lw=3, label_push=-100)
+    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=100, lw=3, label_push=-38)
 
     return _img_bytes(img)
 
@@ -3026,7 +3027,7 @@ def generate_questions_by_template(
 
 
 # --- Module diagnostics (prints to Streamlit logs) ---
-QB_BUILD = "v39.60-arc2x"
+QB_BUILD = "v39.63-arc-radius-100-katex-safe-answers"
 try:
     print(f"QB_BUILD={QB_BUILD}")
     print("QB_TOPICS=" + " | ".join(available_topics()))

@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.61-scale-fix-answork-10pct-trigHB"
+BUILD_ID = "v39.63-fix-practice-latex-color-and-arc-radius"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -410,10 +410,12 @@ def _render_scale_css(scale: float) -> None:
     st.markdown(
         f"""
 <style>
-/* Maths (KaTeX) */
+/* Maths (KaTeX)
+   Use the same base sizing as the question prompt (q_em) so LaTeX never becomes
+   comically large. Per-block overrides (.mw-math/.mw-ans) can still adjust. */
 .katex, .katex-display > .katex {{
     color: #000000;
-    font-size: {scale:.2f}em !important;
+    font-size: {q_em:.3f}em !important;
 }}
 
 /* Tighten KaTeX vertical margins */
@@ -473,6 +475,12 @@ div[data-testid="stMarkdownContainer"] .q-working * {{
     font-size: {aw_em:.3f}em !important;
 }}
 
+/* Answers shown in green (match previous behaviour) WITHOUT using LaTeX color commands.
+   Using \color{#...} can break KaTeX/MathJax parsing and display raw LaTeX text. */
+.mw-ans, .mw-ans .katex, .mw-ans .katex-display > .katex {{
+    color: #00b050 !important;
+}}
+
 /* Small label text (Answer / Working headings) */
 .aw-label {{
   font-size: 0.95rem !important;
@@ -510,10 +518,20 @@ section[data-testid="stSidebar"] .stCaption {{
 
 
 def _render_math_block(latex: str, cls: str = "mw-math") -> None:
-    """Render display-style math in a wrapper div so we can CSS-scale it safely."""
+    """Render display-style LaTeX reliably (KaTeX), with a wrapper for CSS scaling.
+
+    Streamlit does not reliably render $$...$$ when it's placed inside an HTML tag.
+    Use st.latex for math rendering, and wrap it in a div so our CSS
+    (.mw-math/.mw-ans/.mw-work-math) can target the KaTeX output.
+    """
     if not latex or not str(latex).strip():
         return
-    st.markdown(f"<div class='{cls}'>$$ {latex} $$</div>", unsafe_allow_html=True)
+
+    # Wrapper open/close. Streamlit injects raw HTML into the DOM; leaving the
+    # wrapper open allows the LaTeX block to sit inside it.
+    st.markdown(f"<div class='{cls}'>", unsafe_allow_html=True)
+    st.latex(str(latex))
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _render_diagram_scaled(diagram_png: bytes, ui_scale: float) -> None:
@@ -1504,10 +1522,9 @@ def _render_practice_mode():
                     st.rerun()
 
                 if st.session_state[ans_key]:
-                    cAns.markdown(
-                        rf"<div class='mw-ans'>$$ \color{{#008000}}{{{qs[i].answer_latex}}} $$</div>",
-                        unsafe_allow_html=True,
-                    )
+                    with cAns:
+                        # Render answer as LaTeX and color via CSS (mw-ans) to avoid KaTeX parse errors.
+                        _render_math_block(rf"{qs[i].answer_latex}", cls="mw-ans")
                 else:
                     cAns.markdown("&nbsp;", unsafe_allow_html=True)
 
