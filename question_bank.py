@@ -589,7 +589,7 @@ def _draw_angle_arc(
     if abs(d) > math.pi:
         d = d - 2 * math.pi if d > 0 else d + 2 * math.pi
 
-    steps = 16
+    steps = 32
     pts = []
     for i in range(steps + 1):
         t = i / steps
@@ -689,9 +689,9 @@ def _trig_right_triangle_diagram(
     # Angle arc at the chosen acute vertex
     # Larger arc, label placed INSIDE the arc (negative push) so it sits in the white space.
     if angle_vertex == "B":
-        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=70, lw=3, label_push=42)
+        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=140, lw=3, label_push=-50)
     else:
-        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=70, lw=3, label_push=42)
+        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=140, lw=3, label_push=-50)
 
     return _img_bytes(img)
 
@@ -722,7 +722,7 @@ def _trig_elevation_diagram(distance_label: str, angle_label: str, height_label:
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of elevation at B between BA (ground) and BC (line of sight)
-    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=70, lw=3, label_push=42)
+    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=140, lw=3, label_push=-50)
 
     return _img_bytes(img)
 
@@ -2294,7 +2294,7 @@ def _trig_depression_diagram(height_label: str, angle_label: str, distance_label
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of depression at C between horizontal CD and line of sight CB
-    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=70, lw=3, label_push=42)
+    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=140, lw=3, label_push=-50)
 
     return _img_bytes(img)
 
@@ -3023,7 +3023,7 @@ def generate_questions_by_template(
 
 
 # --- Module diagnostics (prints to Streamlit logs) ---
-QB_BUILD = "v39.59-trig-angle-arc-font-fix"
+QB_BUILD = "v39.60-arc2x"
 try:
     print(f"QB_BUILD={QB_BUILD}")
     print("QB_TOPICS=" + " | ".join(available_topics()))

@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.59-trig-display-fixes"
+BUILD_ID = "v39.60-ans30-arc2x-prac20"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -433,13 +433,13 @@ div[data-testid="stMarkdownContainer"] li {{ margin: 0 0 0.08rem 0 !important; }
 /* Make this selector more specific than the global markdown scaling rules. */
 div[data-testid="stMarkdownContainer"] .q-prompt,
 div[data-testid="stMarkdownContainer"] .q-prompt * {{
-    font-size: 1.35rem !important;
+    font-size: 1.05rem !important;
     line-height: 1.18 !important;
     margin: 0 !important;
 }}
 div[data-testid="stMarkdownContainer"] .q-prompt-small,
 div[data-testid="stMarkdownContainer"] .q-prompt-small * {{
-    font-size: 1.35rem !important;
+    font-size: 1.05rem !important;
     line-height: 1.18 !important;
     margin: 0 !important;
 }}
@@ -1409,12 +1409,12 @@ def _render_practice_mode():
     st.markdown(f"<div class='topic-title'>{topic}</div>", unsafe_allow_html=True)
 
     if st.session_state.get("practice_questions") is None:
-        qs = generate_questions_by_template(topic=topic, template_id=template_id, max_difficulty=max_difficulty, n=10, seed=int(st.session_state.practice_seed))
+        qs = generate_questions_by_template(topic=topic, template_id=template_id, max_difficulty=max_difficulty, n=20, seed=int(st.session_state.practice_seed))
         st.session_state.practice_questions = qs
     else:
         qs = st.session_state.practice_questions
 
-    for row in range(5):
+    for row in range(10):
         left_idx = 2 * row
         right_idx = 2 * row + 1
         colL, colR = st.columns(2, gap="medium")
@@ -1447,7 +1447,7 @@ def _render_practice_mode():
                     st.rerun()
 
                 if st.session_state[ans_key]:
-                    cAns.latex(rf"\color{{#008000}}{{{qs[i].answer_latex}}}")
+                    cAns.latex(rf"{{\scriptsize \color{{#008000}}{{{qs[i].answer_latex}}}}}")
                 else:
                     cAns.markdown("&nbsp;", unsafe_allow_html=True)
 
@@ -1779,7 +1779,7 @@ for topic in ordered_topics:
 
             if st.session_state[ans1_key]:
                 st.markdown("**Answer:**")
-                st.latex(q1.answer_latex)
+                st.latex(rf'{{\scriptsize {q1.answer_latex}}}')
 
             if st.session_state[work1_key]:
                 st.markdown("**Working:**")
@@ -1862,7 +1862,7 @@ for topic in ordered_topics:
 
                 if st.session_state[ans2_key]:
                     st.markdown("**Answer:**")
-                    st.latex(q2.answer_latex)
+                    st.latex(rf'{{\scriptsize {q2.answer_latex}}}')
 
                 if st.session_state[work2_key]:
                     st.markdown("**Working:**")
