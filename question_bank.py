@@ -564,7 +564,7 @@ def _draw_angle_arc(
     font: ImageFont.ImageFont,
     r: float = 36,
     lw: int = 3,
-    label_push: float = 18,
+    label_push: float = 0,
 ) -> None:
     """Draw a small arc at vertex V between rays V->P and V->Q (minor angle).
 
@@ -589,7 +589,7 @@ def _draw_angle_arc(
     if abs(d) > math.pi:
         d = d - 2 * math.pi if d > 0 else d + 2 * math.pi
 
-    steps = 32
+    steps = 40
     pts = []
     for i in range(steps + 1):
         t = i / steps
@@ -600,15 +600,73 @@ def _draw_angle_arc(
 
     draw.line(pts, fill=_FG, width=lw)
 
-    amid = a1 + d / 2
-    lx = Vp[0] + (r + label_push) * math.cos(amid)
-    ly = Vp[1] + (r + label_push) * math.sin(amid)
-    # Convert back to screen coords (y down). Keep the label comfortably separated
-    # from the vertex so it doesn't collide with the rays (common at bottom corners).
+    # --- Label placement ---
+    # Place the label on the interior angle bisector in the “white pocket” between
+    # the rays and the arc. We start at ~0.75r, then push outward until the label
+    # point is safely away from both rays (prevents overlaps at tight angles).
+
+    # Unit direction vectors for the two rays in math coords.
+    def _unit(vx0: float, vy0: float) -> Tuple[float, float]:
+        mag = (vx0 * vx0 + vy0 * vy0) ** 0.5 or 1.0
+        return vx0 / mag, vy0 / mag
+
+    u1x, u1y = _unit(Pp[0] - Vp[0], Pp[1] - Vp[1])
+    u2x, u2y = _unit(Qp[0] - Vp[0], Qp[1] - Vp[1])
+
+    # Interior bisector for the minor angle.
+    bx, by = (u1x + u2x), (u1y + u2y)
+    bmag = (bx * bx + by * by) ** 0.5
+    if bmag < 1e-6:
+        # Rays are nearly opposite; fall back to mid-angle direction.
+        amid = a1 + d / 2
+        bx, by = math.cos(amid), math.sin(amid)
+    else:
+        bx, by = bx / bmag, by / bmag
+
+    # Base radius for the label (inside the arc, away from vertex).
+    # Start close to the arc boundary so the label sits in the “white pocket”
+    # and clears both rays (especially for smaller angles).
+    label_r = 0.88 * r + float(label_push)
+
+    # Estimate label size so we can enforce enough clearance from the sides.
+    # (The earlier point-to-ray distance check ignored the label's bbox, which
+    # could still cause overlap when the angle is small.)
+    try:
+        bb = draw.textbbox((0, 0), label, font=font)
+        tw, th = float(bb[2] - bb[0]), float(bb[3] - bb[1])
+    except Exception:
+        # Fallback for older PIL builds.
+        tw, th = map(float, font.getsize(label))
+    label_rad = 0.60 * max(tw, th)  # circle-ish radius approximation
+
+    # Clearance targets (px in math-coords). Keep the label away from both rays
+    # and away from the vertex.
+    min_side_clear = max(22.0, label_rad + 10.0)
+    min_from_vertex = label_rad + 16.0
+
+    # Clamp label radius into a sensible range (just inside the arc).
+    max_r = r * 0.98
+    label_r = max(min_from_vertex, min(max_r, label_r))
+
+    # Distance from point to a ray line through V along unit vector u.
+    def _dist_to_ray(px: float, py: float, ux: float, uy: float) -> float:
+        # perpendicular distance to infinite line
+        return abs((px * uy) - (py * ux))
+
+    # Vector from V to label point in math coords.
+    # Push outward if too close to either side.
+    for _ in range(18):
+        lx = Vp[0] + label_r * bx
+        ly = Vp[1] + label_r * by
+        dx, dy = (lx - Vp[0]), (ly - Vp[1])
+        d1 = _dist_to_ray(dx, dy, u1x, u1y)
+        d2 = _dist_to_ray(dx, dy, u2x, u2y)
+        if d1 >= min_side_clear and d2 >= min_side_clear:
+            break
+        label_r = min(max_r, label_r + 8.0)
+
+    # Convert back to screen coords (y down) and draw.
     sx, sy = lx, -ly
-    min_sep = 34  # px separation from vertex in screen-y direction
-    if abs(sy - vy) < min_sep:
-        sy = (vy - min_sep) if sy < vy else (vy + min_sep)
     _label_center(draw, (sx, sy), label, font)
 
 
@@ -694,9 +752,9 @@ def _trig_right_triangle_diagram(
     if angle_vertex == "B":
         # Arc radius + label placement tuned for clean GCSE-style spacing.
         # Arc radius tuned to keep label clear of sides without looking oversized.
-        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=160, lw=3, label_push=-80)
+        _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=160, lw=3, label_push=0)
     else:
-        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=160, lw=3, label_push=-80)
+        _draw_angle_arc(draw, C, A, B, angle_label, ang_font, r=160, lw=3, label_push=0)
 
     return _img_bytes(img)
 
@@ -727,7 +785,7 @@ def _trig_elevation_diagram(distance_label: str, angle_label: str, height_label:
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of elevation at B between BA (ground) and BC (line of sight)
-    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=160, lw=3, label_push=-80)
+    _draw_angle_arc(draw, B, A, C, angle_label, ang_font, r=160, lw=3, label_push=0)
 
     return _img_bytes(img)
 
@@ -2198,46 +2256,53 @@ def _gen_trig_find_angle(rng: random.Random, seed: int, params: Optional[Dict[st
     """Find a missing acute angle in a right-angled triangle using inverse trig."""
     orient = rng.choice(["BL", "BR", "TL", "TR", "HB"])
     angle_vertex = rng.choice(["B", "C"])
-    mode = rng.choice(["asin", "acos", "atan"])
+    # Avoid very small acute angles (e.g. 10°) because the label can collide with
+    # the vertex/sides even with good placement. GCSE-style diagrams typically use
+    # mid-range acute angles.
+    for _ in range(30):
+        mode = rng.choice(["asin", "acos", "atan"])
 
-    if mode in ("asin", "acos"):
-        hyp = rng.randint(10, 25)
-        small = rng.randint(5, hyp - 2)
-        if mode == "asin":
-            theta = math.degrees(math.asin(small / hyp))
-            if angle_vertex == "B":
-                diagram = _trig_right_triangle_diagram(str(small), "", str(hyp), "B", "x°", orientation=orient)
+        if mode in ("asin", "acos"):
+            hyp = rng.randint(10, 25)
+            small = rng.randint(5, hyp - 2)
+            if mode == "asin":
+                theta = math.degrees(math.asin(small / hyp))
+                if angle_vertex == "B":
+                    diagram = _trig_right_triangle_diagram(str(small), "", str(hyp), "B", "x°", orientation=orient)
+                else:
+                    diagram = _trig_right_triangle_diagram("", str(small), str(hyp), "C", "x°", orientation=orient)
+                working = [
+                    ("text", "Use sine (inverse)."),
+                    ("math", rf"\sin(x^\circ)=\frac{{{small}}}{{{hyp}}}"),
+                    ("math", rf"x=\sin^{{-1}}\!\left(\frac{{{small}}}{{{hyp}}}\right)"),
+                ]
             else:
-                diagram = _trig_right_triangle_diagram("", str(small), str(hyp), "C", "x°", orientation=orient)
-            working = [
-                ("text", "Use sine (inverse)."),
-                ("math", rf"\sin(x^\circ)=\frac{{{small}}}{{{hyp}}}"),
-                ("math", rf"x=\sin^{{-1}}\!\left(\frac{{{small}}}{{{hyp}}}\right)"),
-            ]
+                theta = math.degrees(math.acos(small / hyp))
+                if angle_vertex == "B":
+                    diagram = _trig_right_triangle_diagram("", str(small), str(hyp), "B", "x°", orientation=orient)
+                else:
+                    diagram = _trig_right_triangle_diagram(str(small), "", str(hyp), "C", "x°", orientation=orient)
+                working = [
+                    ("text", "Use cosine (inverse)."),
+                    ("math", rf"\cos(x^\circ)=\frac{{{small}}}{{{hyp}}}"),
+                    ("math", rf"x=\cos^{{-1}}\!\left(\frac{{{small}}}{{{hyp}}}\right)"),
+                ]
         else:
-            theta = math.degrees(math.acos(small / hyp))
+            adj = rng.randint(6, 20)
+            opp = rng.randint(6, 20)
+            theta = math.degrees(math.atan(opp / adj))
             if angle_vertex == "B":
-                diagram = _trig_right_triangle_diagram("", str(small), str(hyp), "B", "x°", orientation=orient)
+                diagram = _trig_right_triangle_diagram(str(opp), str(adj), "", "B", "x°", orientation=orient)
             else:
-                diagram = _trig_right_triangle_diagram(str(small), "", str(hyp), "C", "x°", orientation=orient)
+                diagram = _trig_right_triangle_diagram(str(adj), str(opp), "", "C", "x°", orientation=orient)
             working = [
-                ("text", "Use cosine (inverse)."),
-                ("math", rf"\cos(x^\circ)=\frac{{{small}}}{{{hyp}}}"),
-                ("math", rf"x=\cos^{{-1}}\!\left(\frac{{{small}}}{{{hyp}}}\right)"),
+                ("text", "Use tangent (inverse)."),
+                ("math", rf"\tan(x^\circ)=\frac{{{opp}}}{{{adj}}}"),
+                ("math", rf"x=\tan^{{-1}}\!\left(\frac{{{opp}}}{{{adj}}}\right)"),
             ]
-    else:
-        adj = rng.randint(6, 20)
-        opp = rng.randint(6, 20)
-        theta = math.degrees(math.atan(opp / adj))
-        if angle_vertex == "B":
-            diagram = _trig_right_triangle_diagram(str(opp), str(adj), "", "B", "x°", orientation=orient)
-        else:
-            diagram = _trig_right_triangle_diagram(str(adj), str(opp), "", "C", "x°", orientation=orient)
-        working = [
-            ("text", "Use tangent (inverse)."),
-            ("math", rf"\tan(x^\circ)=\frac{{{opp}}}{{{adj}}}"),
-            ("math", rf"x=\tan^{{-1}}\!\left(\frac{{{opp}}}{{{adj}}}\right)"),
-        ]
+
+        if 20.0 <= float(theta) <= 70.0:
+            break
 
     prompt = "Find the angle marked x (°). Give your answer to 1 decimal place."
     latex = ""
@@ -2299,7 +2364,7 @@ def _trig_depression_diagram(height_label: str, angle_label: str, distance_label
     _label_center(draw, (A[0] - 44, (A[1] + C[1]) / 2), height_label, font)
 
     # Angle of depression at C between horizontal CD and line of sight CB
-    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=160, lw=3, label_push=-80)
+    _draw_angle_arc(draw, C, D, B, angle_label, ang_font, r=160, lw=3, label_push=0)
 
     return _img_bytes(img)
 
@@ -3028,7 +3093,7 @@ def generate_questions_by_template(
 
 
 # --- Module diagnostics (prints to Streamlit logs) ---
-QB_BUILD = "v39.65-trig-arc-radius-160"
+QB_BUILD = "v39.66-angle-label-clear-answork-65"
 try:
     print(f"QB_BUILD={QB_BUILD}")
     print("QB_TOPICS=" + " | ".join(available_topics()))

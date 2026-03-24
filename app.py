@@ -38,7 +38,7 @@ except Exception:
 
 st.set_page_config(page_title="Maths Worksheet Generator", layout="wide")
 
-BUILD_ID = "v39.64-fix-css-fstring-braces-practice-latex-arc80"
+BUILD_ID = "v39.66-angle-labels-answork-scale"
 print(f"BUILD={BUILD_ID}")
 try:
     print("AVAILABLE_TOPICS=", available_topics())
@@ -402,11 +402,15 @@ def _pretty_text(s: str) -> str:
 def _render_scale_css(scale: float) -> None:
     """Scale question text + maths for readability (iPad-first)."""
     # Keep external (non-scratchpad) question prompts close to the embedded scratchpad size,
-    # but still responsive to the +/- controls. Answers/working should be ~10% larger.
+    # but still responsive to the +/- controls.
     q_rem = 0.35 * float(scale)          # ui_scale=3.0 -> ~1.05rem
-    aw_rem = 1.10 * q_rem                # ~10% larger than question text
+
+    # Answers/working are still reading too large on iPad. Reduce them by a further
+    # ~35% (while still scaling with +/-).
+    aw_rem = 0.65 * (0.65 * (1.10 * q_rem))
+
     q_em = 0.35 * float(scale)           # ui_scale=3.0 -> ~1.05em (KaTeX)
-    aw_em = 1.10 * q_em
+    aw_em = 0.65 * (0.65 * (1.10 * q_em))
     st.markdown(
         f"""
 <style>
@@ -452,7 +456,7 @@ div[data-testid="stMarkdownContainer"] .q-prompt-small * {{
     margin: 0 !important;
 }}
 
-/* Answer + working text: ~10% larger than the question prompt, and scalable */
+/* Answer + working text: reduced size (scales with +/-) */
 div[data-testid="stMarkdownContainer"] .q-answer,
 div[data-testid="stMarkdownContainer"] .q-answer * {{
     font-size: {aw_rem:.3f}rem !important;
@@ -484,7 +488,7 @@ div[data-testid="stMarkdownContainer"] .q-working * {{
 
 /* Small label text (Answer / Working headings) */
 .aw-label {{
-  font-size: 0.95rem !important;
+  font-size: {0.90*aw_rem:.3f}rem !important;
   line-height: 1.15 !important;
   margin: 0.2rem 0 0.15rem 0 !important;
   font-weight: 700;
